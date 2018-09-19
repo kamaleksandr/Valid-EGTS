@@ -184,7 +184,7 @@ std::unique_ptr<char> TEGTSRecord::GetData( uint16_t *size )
       error.message = "ds_list.New() return 0";
       EGTSHandleAnError( error );
 #endif
-      return std::unique_ptr<char>( );
+      return 0;
     }
     try
     {
@@ -196,7 +196,7 @@ std::unique_ptr<char> TEGTSRecord::GetData( uint16_t *size )
       error.message = "TEGTSSubrecord::GetData throw an exception: "
           + ( std::string )e.what( );
       EGTSHandleAnError( error );
-      return std::unique_ptr<char>( );
+      return 0;
     }
     if ( !ds->data )
     {
@@ -206,12 +206,24 @@ std::unique_ptr<char> TEGTSRecord::GetData( uint16_t *size )
       error.message = "TEGTSSubrecord::GetData return 0";
       EGTSHandleAnError( error );
 #endif
-      return std::unique_ptr<char>( );
+      return 0;
     }
     head.rl += ds->size;
   }
   *size += head.rl;
-  char *data = new char[*size];
+  char *data;
+  try
+  {
+    data = new char[*size];
+  } catch ( std::exception &e )
+  {
+    egts_error_t error = {0};
+    error.sender = "TEGTSRecord::GetData, RN = " + to_string( head.rn );
+    error.message = "new char[" + to_string( *size ) + "] throw an exception: "
+        + ( std::string )e.what( );
+    EGTSHandleAnError( error );
+    return 0;
+  }
   std::unique_ptr<char> pdata( data );
 
   uint16_t pos = 0;
@@ -410,7 +422,7 @@ std::unique_ptr<char> TEGTSPacket::GetData( uint16_t *size )
       error.message = "frame_size > EGTS_MAX_FRAME_SIZE";
       EGTSHandleAnError( error );
 #endif
-      return std::unique_ptr<char>( );
+      return 0;
     }
   }
   head.hl = head.bf.rte ? 16 : 11;
@@ -421,7 +433,7 @@ std::unique_ptr<char> TEGTSPacket::GetData( uint16_t *size )
     if ( rmndr ) head.fdl += ( 8 - rmndr );
   }
   *size = head.fdl ? head.hl + head.fdl + 2 : head.hl;
-
+  
   char *data;
   try
   {
@@ -429,11 +441,11 @@ std::unique_ptr<char> TEGTSPacket::GetData( uint16_t *size )
   } catch ( std::exception &e )
   {
     egts_error_t error = {0};
-    error.sender = "TEGTSPacket::GetData, RN = " + to_string( head.pid );
+    error.sender = "TEGTSPacket::GetData, PID = " + to_string( head.pid );
     error.message = "new char[" + to_string( *size ) + "] throw an exception: "
         + ( std::string )e.what( );
     EGTSHandleAnError( error );
-    return std::unique_ptr<char>( );
+    return 0;
   }
   std::unique_ptr<char> pdata( data );
 
