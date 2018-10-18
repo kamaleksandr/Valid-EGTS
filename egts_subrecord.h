@@ -537,6 +537,27 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
+class TEGTSServiceInfo : public TEGTSSubrecord //EGTS_SR_SERVICE_INFO
+{
+public:
+  TEGTSServiceInfo();
+#pragma pack(push,1)
+  struct
+  {
+    uint8_t st;
+    uint8_t sst;
+    struct
+    {
+      uint8_t srvrp : 2;
+      uint8_t void_field : 5;
+      uint8_t srva : 1;
+    } srvp;
+  } body;
+#pragma pack(pop)
+  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
+  std::unique_ptr<char> GetData( uint16_t *size );
+};
+
 class TEGTSVehicleData : public TEGTSSubrecord // EGTS_SR_VEHICLE_DATA
 {
 public:

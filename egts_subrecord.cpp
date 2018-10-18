@@ -1006,6 +1006,28 @@ std::unique_ptr<char> TEGTSAuthInfo::GetData( uint16_t *size )
   return ptr;
 }
 
+TEGTSServiceInfo::TEGTSServiceInfo( )
+{
+  type = EGTS_SR_SERVICE_INFO;
+  memset( &body, 0, sizeof( body ) );
+}
+uint8_t TEGTSServiceInfo::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+{
+  const uint16_t body_size = sizeof( body );
+  if ( size < body_size ) return 0;
+  memcpy( &body, data, body_size );
+  if ( ppos ) *ppos = body_size;
+  return 1;
+}
+std::unique_ptr<char> TEGTSServiceInfo::GetData( uint16_t *size )
+{
+  *size = sizeof( body );
+  std::unique_ptr<char> ptr( PrepareGetData( size ) );
+  char *data = ( ptr.get( ) + EGTS_SBR_HDR_SIZE );
+  memcpy( data, &body, *size );
+  return ptr;
+}
+
 TEGTSVehicleData::TEGTSVehicleData( )
 {
   type = EGTS_SR_VEHICLE_DATA;
@@ -1072,7 +1094,7 @@ TEGTSSubrecord* TEGTSInsAccel::Copy( )
   acc->y = y;
   acc->z = z;
   acc->xyz_data.reset( new char[dl] );
-  memcpy( acc->xyz_data.get(), xyz_data.get(), dl );
+  memcpy( acc->xyz_data.get( ), xyz_data.get( ), dl );
   return acc;
 }
 

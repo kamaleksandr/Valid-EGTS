@@ -54,12 +54,12 @@ inline TEGTSSubrecord* TEGTSRecord::GetInheritor( uint8_t type )
     {
       case EGTS_SR_TERM_IDENTITY: return new TEGTSTermIdent;
       case EGTS_SR_TERM_IDENTITY2: return new TEGTSTermIdent2;
-      case EGTS_SR_DISPATCHER_IDENTITY: return new TEGTSDispIdent;
       case EGTS_SR_VEHICLE_DATA: return new TEGTSVehicleData;
-      case EGTS_SR_RESULT_CODE: return new TEGTSResultCode;
+      case EGTS_SR_DISPATCHER_IDENTITY: return new TEGTSDispIdent;
       case EGTS_SR_AUTH_PARAMS: return new TEGTSAuthParams;
-      case EGTS_SR_AUTH_INFO: return new TEGTSAuthInfo;
-
+      case EGTS_SR_AUTH_INFO: return new TEGTSAuthInfo;   
+      case EGTS_SR_SERVICE_INFO: return new TEGTSServiceInfo;
+      case EGTS_SR_RESULT_CODE: return new TEGTSResultCode;
     }
   else if ( rst == EGTS_TELEDATA_SERVICE )
     switch ( type )
