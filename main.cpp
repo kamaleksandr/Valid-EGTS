@@ -50,6 +50,11 @@ int main( int argc, char** argv )
     inf->user_pass = "test password";
     ath->sbrs.Add( inf );
 
+    TEGTSServiceInfo *srv = new TEGTSServiceInfo;
+    srv->body.st = EGTS_EUROPROTOCOL_SERVICE;
+    srv->body.sst = EGTS_SST_IN_SERVICE;
+    ath->sbrs.Add( srv );
+
     ath->sbrs.Add( new TEGTSResultCode );
 
     TEGTSTermIdent2 *tid2 = new TEGTSTermIdent2;
@@ -113,7 +118,7 @@ int main( int argc, char** argv )
     msd->additional.data.reset( new char[16] );
     msd->additional.size = 16;
     ecs->sbrs.Add( msd );
-    
+
     TEGTSRecord *ins = pack.recs.New( );
     ins->head.rn = 3;
     ins->rst = EGTS_INSURANCE_SERVICE;
@@ -124,16 +129,22 @@ int main( int argc, char** argv )
     eps->head.rn = 4;
 
     eps->sbrs.Add( new TEGTSEPMainData );
-
+    
     TEGTSEPTrackData *track = new TEGTSEPTrackData;
     eps->sbrs.Add( track );
 
-    eps->sbrs.Add( new TEGTSEPSignature );
-
     std::unique_ptr<TEGTSEPCompData> cmp( new TEGTSEPCompData );
-    if ( cmp->Compress( track ) ) eps->sbrs.Add( cmp.release() );
+    if ( cmp->Compress( track ) ) eps->sbrs.Add( cmp.release( ) );
 
     eps->sbrs.Add( new TEGTSEPAccelData3 );
+    
+    TEGTSEPSignature *sign = new TEGTSEPSignature;
+    TEGTSEPSignData *sd = sign->sd_list.New();
+    sd->sd.reset( new char[72] );
+    memcpy( sd->sd.get(), "test signature\0", 15 );
+    sd->SetSignLength( 72 );
+    eps->sbrs.Add( sign );  
+    
   } catch ( std::exception &e )
   {
     std::cout << e.what( ) << "\r\n";
@@ -156,7 +167,7 @@ int main( int argc, char** argv )
         sbr->GetData( &srl );
       } catch ( std::exception &e )
       {
-        std::cout << e.what() << "\r\n";
+        std::cout << e.what( ) << "\r\n";
         return 1;
       }
       std::cout << "subrecord, srt = " << (int16_t)sbr->GetType( ) << ", srl = ";
@@ -169,22 +180,29 @@ int main( int argc, char** argv )
           TEGTSTermIdent *tid = dynamic_cast<TEGTSTermIdent*>( sbr );
           if ( tid ) std::cout << tid->imei << "\r\n";
         }
-        if ( type == EGTS_SR_TERM_IDENTITY2 )
+        else if ( type == EGTS_SR_TERM_IDENTITY2 )
         {
           TEGTSTermIdent2 *tid2 = dynamic_cast<TEGTSTermIdent2*>( sbr );
           if ( tid2 ) std::cout << tid2->iccid << "\r\n";
         }
-        if ( type == EGTS_SR_DISPATCHER_IDENTITY )
+        else if ( type == EGTS_SR_DISPATCHER_IDENTITY )
         {
           TEGTSDispIdent *did = dynamic_cast<TEGTSDispIdent*>( sbr );
           if ( did ) std::cout << did->dscr << "\r\n";
         }
-        if ( sbr->GetType( ) == EGTS_SR_AUTH_INFO )
+        else if ( sbr->GetType( ) == EGTS_SR_AUTH_INFO )
         {
           TEGTSAuthInfo *inf = dynamic_cast<TEGTSAuthInfo*>( sbr );
           if ( inf ) std::cout << inf->user_name << ";" << inf->user_pass << "\r\n";
         }
-        if ( type == EGTS_SR_VEHICLE_DATA )
+        else if ( sbr->GetType( ) == EGTS_SR_SERVICE_INFO )
+        {
+          TEGTSServiceInfo *srv = dynamic_cast<TEGTSServiceInfo*>( sbr );
+          if ( !srv ) continue;
+          std::cout << "ST = " << (uint16_t)srv->body.st;
+          std::cout << ", SST = " << (uint16_t)srv->body.sst << "\r\n";
+        }
+        else if ( type == EGTS_SR_VEHICLE_DATA )
         {
           TEGTSVehicleData *veh = dynamic_cast<TEGTSVehicleData*>( sbr );
           if ( veh ) std::cout << veh->body.vin << "\r\n";
@@ -201,20 +219,20 @@ int main( int argc, char** argv )
           std::cout << pos->GetSpeed( ) << ", course = " << pos->GetCourse( );
           std::cout << ", time = " << pos->GetTime( ) << "\r\n";
         }
-        if ( type == EGTS_SR_AD_SENSORS_DATA )
+        else if ( type == EGTS_SR_AD_SENSORS_DATA )
         {
           TEGTSAdSensors *ads = dynamic_cast<TEGTSAdSensors*>( sbr );
           if ( !ads ) continue;
           std::cout << "ain2 = " << ads->GetAin( 2 );
           std::cout << ", din3 = " << (uint16_t)ads->GetDin( 3 ) << "\r\n";
         }
-        if ( type == EGTS_SR_COUNTERS_DATA )
+        else if ( type == EGTS_SR_COUNTERS_DATA )
         {
           TEGTSCounters *cnt = dynamic_cast<TEGTSCounters*>( sbr );
           if ( cnt )
             std::cout << "counter4 = " << cnt->GetCounter( 4 ) << "\r\n";
         }
-        if ( type == EGTS_SR_PASSENGERS_COUNTERS )
+        else if ( type == EGTS_SR_PASSENGERS_COUNTERS )
         {
           TEGTSPassengers *psg = dynamic_cast<TEGTSPassengers*>( sbr );
           if ( !psg ) continue;
@@ -230,14 +248,26 @@ int main( int argc, char** argv )
       else if ( r->rst == EGTS_EUROPROTOCOL_SERVICE )
       {
         if ( type == EGTS_SR_EP_COMP_DATA )
+        {        
+          TEGTSEPMainData *md = dynamic_cast<TEGTSEPMainData*>( sbr );
+          if ( md ) std::cout << "bn = " << md->GetBlockNumber();
+        }
+        else if ( type == EGTS_SR_EP_COMP_DATA )
         {
           TEGTSEPCompData *cmp = dynamic_cast<TEGTSEPCompData*>( sbr );
           if ( !cmp ) continue;
-          std::unique_ptr<TEGTSSubrecord> unpacked = cmp->Extract();
+          std::unique_ptr<TEGTSSubrecord> unpacked = cmp->Extract( );
           if ( !unpacked ) continue;
           std::cout << "unpacked subrecord, srt = " << (int16_t)unpacked->GetType( ) << "\r\n";
         }
-
+        else if ( type == EGTS_SR_EP_SIGNATURE )
+        {
+          TEGTSEPSignature *sign = dynamic_cast<TEGTSEPSignature*>( sbr );
+          if ( !sign ) continue;
+          TEGTSEPSignData *ds = sign->sd_list.First();
+          if ( !ds ) continue;
+          std::cout << "signature length = " << ds->GetSignLength() << ", " << ds->sd.get();
+        }
       }
     }
   }
