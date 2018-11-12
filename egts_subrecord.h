@@ -131,6 +131,31 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
+class TEGTSEPSignData
+{
+public:
+	TEGTSEPSignData(){ memset( &head, 0, sizeof( head ) ); }
+#pragma pack(push,1)
+  struct sign_data_head_t
+  {
+    uint8_t bnl;
+    uint16_t keyn;
+    uint32_t algid;
+    uint8_t slnl;
+    struct
+    {
+      uint8_t slnh : 6;
+      uint8_t bnh : 2;
+    } bf;
+  } head;
+#pragma pack(pop)
+  std::unique_ptr<char> sd;
+  void SetBlockNumber( uint16_t val );
+  uint16_t GetBlockNumber( );
+  void SetSignLength( uint16_t val );
+  uint16_t GetSignLength( );
+};
+
 class TEGTSEPSignature : public TEGTSSubrecord // EGTS_SR_EP_SIGNATURE
 {
 public:
@@ -138,21 +163,7 @@ public:
   ~TEGTSEPSignature( ){}
   uint8_t ver;
   uint8_t sa;
-#pragma pack(push,1)
-  struct sign_data_head_t
-  {
-    uint16_t keyn;
-    uint32_t algid;
-    uint16_t sln;
-  };
-#pragma pack(pop)
-  struct sign_data_t
-  {
-    sign_data_t( ){ memset( &head, 0, 8 ); }
-    sign_data_head_t head;
-    std::unique_ptr<char> sd;
-  };
-  egts_object_list_t< sign_data_t > sd_list;
+  egts_object_list_t< TEGTSEPSignData > sd_list;
   uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
   std::unique_ptr<char> GetData( uint16_t *size );
 };

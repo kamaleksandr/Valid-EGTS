@@ -199,6 +199,32 @@ std::unique_ptr<char> TEGTSEPCompData::GetData( uint16_t *size )
   return ptr;
 }
 
+void TEGTSEPSignData::SetBlockNumber( uint16_t val )
+{
+  head.bnl = val & 0x00ff; // 0000 0000 1111 1111
+  head.bf.bnh = ( val & 0x0300 ) >> 8; // 0000 0011 0000 0000
+}
+
+uint16_t TEGTSEPSignData::GetBlockNumber( )
+{
+  uint16_t val = head.bf.bnh;
+  val = ( val << 8 ) + head.bnl;
+  return val;
+}
+
+void TEGTSEPSignData::SetSignLength( uint16_t val )
+{
+  head.slnl = val & 0x00ff; // 0000 0000 1111 1111
+  head.bf.slnh = ( val & 0x3f00 ) >> 8; // 0011 1111 0000 0000
+}
+
+uint16_t TEGTSEPSignData::GetSignLength( )
+{
+  uint16_t val = head.bf.slnh;
+  val = ( val << 8 ) + head.slnl;
+  return val;
+}
+
 TEGTSEPSignature::TEGTSEPSignature( )
 {
   ver = 1;
@@ -208,22 +234,23 @@ TEGTSEPSignature::TEGTSEPSignature( )
 
 uint8_t TEGTSEPSignature::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
-  const uint16_t sd_head_size = sizeof( sign_data_head_t );
+  const uint16_t sd_head_size = sizeof( TEGTSEPSignData::sign_data_head_t );
   if ( 2 > size ) return 0;
   ver = data[0];
   sa = data[1];
-  uint16_t pos = 2;
+  uint16_t pos = 2, len;
   for ( int i = 0; i < sa; i++ )
   {
     if ( pos + sd_head_size > size ) return 0;
-    std::unique_ptr< sign_data_t > sd( new sign_data_t );
+    std::unique_ptr< TEGTSEPSignData > sd( new TEGTSEPSignData );
     memcpy( &sd->head, data + pos, sd_head_size );
     pos += sd_head_size;
-    if ( !sd->head.sln ) continue;
-    if ( pos + sd->head.sln > size ) return 0;
-    sd->sd.reset( new char[sd->head.sln] );
-    memcpy( sd->sd.get( ), data + pos, sd->head.sln );
-    pos += sd->head.sln;
+    len = sd->GetSignLength( );
+    if ( !len ) continue;
+    if ( pos + len > size ) return 0;
+    sd->sd.reset( new char[len] );
+    memcpy( sd->sd.get( ), data + pos, len );
+    pos += len;
     sd_list.Add( sd.release( ) );
   }
   if ( ppos ) *ppos = pos;
@@ -232,24 +259,25 @@ uint8_t TEGTSEPSignature::SetSRD( const char *data, uint16_t size, uint16_t *ppo
 
 std::unique_ptr<char> TEGTSEPSignature::GetData( uint16_t *size )
 {
-  const uint16_t sd_head_size = sizeof( sign_data_head_t );
+  const uint16_t sd_head_size = sizeof( TEGTSEPSignData::sign_data_head_t );
   *size = 2;
   sa = sd_list.Count( );
-  sign_data_t *sd = sd_list.First( );
+  TEGTSEPSignData *sd = sd_list.First( );
   for (; sd; sd = sd_list.Next( ) )
-    *size += sd_head_size + sd->head.sln;
+    *size += sd_head_size + sd->GetSignLength( );
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
   char *data = ( ptr.get( ) + EGTS_SBR_HDR_SIZE );
   data[0] = ver;
   data[1] = sa;
-  uint16_t pos = 2;
+  uint16_t pos = 2, len;
   for ( sd = sd_list.First( ); sd; sd = sd_list.Next( ) )
   {
     memcpy( data + pos, &sd->head, sd_head_size );
     pos += sd_head_size;
-    if ( !sd->head.sln ) continue;
-    memcpy( data + pos, sd->sd.get( ), sd->head.sln );
-    pos += sd->head.sln;
+    len = sd->GetSignLength( );
+    if ( !len ) continue;
+    memcpy( data + pos, sd->sd.get( ), len );
+    pos += len;
   }
   return ptr;
 }
@@ -1011,6 +1039,7 @@ TEGTSServiceInfo::TEGTSServiceInfo( )
   type = EGTS_SR_SERVICE_INFO;
   memset( &body, 0, sizeof( body ) );
 }
+
 uint8_t TEGTSServiceInfo::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   const uint16_t body_size = sizeof( body );
@@ -1019,6 +1048,7 @@ uint8_t TEGTSServiceInfo::SetSRD( const char *data, uint16_t size, uint16_t *ppo
   if ( ppos ) *ppos = body_size;
   return 1;
 }
+
 std::unique_ptr<char> TEGTSServiceInfo::GetData( uint16_t *size )
 {
   *size = sizeof( body );
