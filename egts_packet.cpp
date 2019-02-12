@@ -11,6 +11,8 @@
 
 #include <sstream>
 
+using namespace EGTS;
+
 static std::string to_string( int32_t val )
 {
   std::stringstream ss;
@@ -18,7 +20,7 @@ static std::string to_string( int32_t val )
   return ss.str( );
 }
 
-TEGTSRecord::TEGTSRecord( )
+TRecord::TRecord( )
 {
   memset( &head, 0, sizeof( head ) );
   head.rfl.ssod = 1;
@@ -30,58 +32,58 @@ TEGTSRecord::TEGTSRecord( )
   rst = EGTS_AUTH_SERVICE;
 }
 
-inline TEGTSSubrecord* TEGTSRecord::GetInheritor( uint8_t type )
+inline TSubrecord* TRecord::GetInheritor( uint8_t type )
 {
   if ( type == EGTS_SR_RECORD_RESPONSE )
-    return new TEGTSRecResp;
+    return new TRecResp;
   else if ( rst == EGTS_ECALL_SERVICE )
     switch ( type )
     {
-      case EGTS_SR_RAW_MSD_DATA: return new TEGTSECallRawMSD;
-      case EGTS_SR_MSD_DATA: return new TEGTSECallMSD;
+      case EGTS_SR_RAW_MSD_DATA: return new TECallRawMSD;
+      case EGTS_SR_MSD_DATA: return new TECallMSD;
     }
   else if ( rst == EGTS_EUROPROTOCOL_SERVICE )
     switch ( type )
     {
-      case EGTS_SR_EP_MAIN_DATA: return new TEGTSEPMainData;
-      case EGTS_SR_EP_TRACK_DATA: return new TEGTSEPTrackData;
-      case EGTS_SR_EP_COMP_DATA: return new TEGTSEPCompData;
-      case EGTS_SR_EP_ACCEL_DATA3: return new TEGTSEPAccelData3;
-      case EGTS_SR_EP_SIGNATURE: return new TEGTSEPSignature;
+      case EGTS_SR_EP_MAIN_DATA: return new TEPMainData;
+      case EGTS_SR_EP_TRACK_DATA: return new TEPTrackData;
+      case EGTS_SR_EP_COMP_DATA: return new TEPCompData;
+      case EGTS_SR_EP_ACCEL_DATA3: return new TEPAccelData3;
+      case EGTS_SR_EP_SIGNATURE: return new TEPSignature;
     }
   else if ( rst == EGTS_AUTH_SERVICE )
     switch ( type )
     {
-      case EGTS_SR_TERM_IDENTITY: return new TEGTSTermIdent;
-      case EGTS_SR_TERM_IDENTITY2: return new TEGTSTermIdent2;
-      case EGTS_SR_VEHICLE_DATA: return new TEGTSVehicleData;
-      case EGTS_SR_DISPATCHER_IDENTITY: return new TEGTSDispIdent;
-      case EGTS_SR_AUTH_PARAMS: return new TEGTSAuthParams;
-      case EGTS_SR_AUTH_INFO: return new TEGTSAuthInfo;   
-      case EGTS_SR_SERVICE_INFO: return new TEGTSServiceInfo;
-      case EGTS_SR_RESULT_CODE: return new TEGTSResultCode;
+      case EGTS_SR_TERM_IDENTITY: return new TTermIdent;
+      case EGTS_SR_TERM_IDENTITY2: return new TTermIdent2;
+      case EGTS_SR_VEHICLE_DATA: return new TVehicleData;
+      case EGTS_SR_DISPATCHER_IDENTITY: return new TDispIdent;
+      case EGTS_SR_AUTH_PARAMS: return new TAuthParams;
+      case EGTS_SR_AUTH_INFO: return new TAuthInfo;   
+      case EGTS_SR_SERVICE_INFO: return new TServiceInfo;
+      case EGTS_SR_RESULT_CODE: return new TResultCode;
     }
   else if ( rst == EGTS_TELEDATA_SERVICE )
     switch ( type )
     {
-      case EGTS_SR_EGTSPLUS_DATA: return new TEGTSPlusData;
-      case EGTS_SR_POS_DATA: return new TEGTSPosData;
-      case EGTS_SR_EXT_POS_DATA: return new TEGTSExtPosData;
-      case EGTS_SR_AD_SENSORS_DATA: return new TEGTSAdSensors;
-      case EGTS_SR_COUNTERS_DATA: return new TEGTSCounters;
-      case EGTS_SR_STATE_DATA: return new TEGTSStateData;
-      case EGTS_SR_LIQUID_LEVEL_SENSOR: return new TEGTSLiquidLevel;
-      case EGTS_SR_PASSENGERS_COUNTERS: return new TEGTSPassengers;
+      case EGTS_SR_EGTSPLUS_DATA: return new TPlusData;
+      case EGTS_SR_POS_DATA: return new TPosData;
+      case EGTS_SR_EXT_POS_DATA: return new TExtPosData;
+      case EGTS_SR_AD_SENSORS_DATA: return new TAdSensors;
+      case EGTS_SR_COUNTERS_DATA: return new TCounters;
+      case EGTS_SR_STATE_DATA: return new TStateData;
+      case EGTS_SR_LIQUID_LEVEL_SENSOR: return new TLiquidLevel;
+      case EGTS_SR_PASSENGERS_COUNTERS: return new TPassengers;
     }
   else if ( rst == EGTS_INSURANCE_SERVICE )
     switch ( type )
     {
-      case EGTS_SR_INSURANCE_ACCEL_DATA: return new TEGTSInsAccel;
+      case EGTS_SR_INSURANCE_ACCEL_DATA: return new TInsAccel;
     }
   return 0;
 }
 
-uint8_t TEGTSRecord::SetData( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TRecord::SetData( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( ppos ) *ppos = 0;
   if ( size < 7 ) return 0;
@@ -114,34 +116,34 @@ uint8_t TEGTSRecord::SetData( const char *data, uint16_t size, uint16_t *ppos )
     if ( pos >= size ) return 0;
     uint16_t offset, rl = 0, srl;
     const char *srd;
-    TEGTSSubrecord *sbr;
+    TSubrecord *sbr;
     while ( pos + 3 < size )
     {
-      egts_subrec_header_t *hdr = (egts_subrec_header_t*)( data + pos );
+      subrec_header_t *hdr = (subrec_header_t*)( data + pos );
       try
       {
         sbr = GetInheritor( hdr->type );
       } catch ( std::exception &e )
       {
-        egts_error_t error = {0};
-        error.sender = "TEGTSRecord::SetSRD, RN = " + to_string( head.rn );
-        error.message = "TEGTSRecord::GetInheritor( " + to_string( hdr->type )
+        EGTS::error_t error = {0};
+        error.sender = "TRecord::SetSRD, RN = " + to_string( head.rn );
+        error.message = "TRecord::GetInheritor( " + to_string( hdr->type )
             + " ) throw an exception: " + ( std::string )e.what( );
-        EGTSHandleAnError( error );
+        HandleAnError( error );
         return 0;
       }
       if ( !sbr )
       {
 #ifdef AUX_MODE
-        egts_error_t error = {0};
-        error.sender = "TEGTSRecord::SetSRD, RN = " + to_string( head.rn );
-        error.message = "TEGTSRecord::GetInheritor( " + to_string( hdr->type )
+        EGTS::error_t error = {0};
+        error.sender = "TRecord::SetSRD, RN = " + to_string( head.rn );
+        error.message = "TRecord::GetInheritor( " + to_string( hdr->type )
             + " ), rst = " + to_string( this->rst ) + ", return 0";
-        EGTSHandleAnError( error );
+        HandleAnError( error );
 #endif
         return 0;
       }
-      std::unique_ptr<TEGTSSubrecord> ptr( sbr );
+      std::unique_ptr<EGTS::TSubrecord> ptr( sbr );
       srl = size - pos;
       srd = sbr->SubrecordData( data + pos, &srl );
       if ( !srd ) break;
@@ -150,11 +152,11 @@ uint8_t TEGTSRecord::SetData( const char *data, uint16_t size, uint16_t *ppos )
         if ( !sbr->SetSRD( srd, srl, &offset ) ) break;
       } catch ( std::exception &e )
       {
-        egts_error_t error = {0};
-        error.sender = "TEGTSRecord::SetSRD, RN = " + to_string( head.rn );
-        error.message = "TEGTSSubrecord::SetSRD throw an exception: "
+        EGTS::error_t error = {0};
+        error.sender = "TRecord::SetSRD, RN = " + to_string( head.rn );
+        error.message = "TSubrecord::SetSRD throw an exception: "
             + ( std::string )e.what( );
-        EGTSHandleAnError( error );
+        HandleAnError( error );
         return 0;
       }
       sbrs.Add( ptr.release( ) );
@@ -167,22 +169,22 @@ uint8_t TEGTSRecord::SetData( const char *data, uint16_t size, uint16_t *ppos )
   return sbrs.Count( );
 }
 
-std::unique_ptr<char> TEGTSRecord::GetData( uint16_t *size )
+std::unique_ptr<char> TRecord::GetData( uint16_t *size )
 {
   *size = sizeof( head ) + 2 + head.rfl.tmfe * 4
       + head.rfl.evfe * 4 + head.rfl.obfe * 4;
-  egts_object_list_t< egts_data_size_t > ds_list;
+  object_list_t< data_size_t > ds_list;
   head.rl = 0;
-  for ( TEGTSSubrecord *sbr = sbrs.First( ); sbr; sbr = sbrs.Next( ) )
+  for ( TSubrecord *sbr = sbrs.First( ); sbr; sbr = sbrs.Next( ) )
   {
-    egts_data_size_t *ds = ds_list.New( );
+    data_size_t *ds = ds_list.New( );
     if ( !ds )
     {
 #ifdef AUX_MODE
-      egts_error_t error = {0};
-      error.sender = "TEGTSRecord::GetData, RN = " + to_string( head.rn );
+      EGTS::error_t error = {0};
+      error.sender = "TRecord::GetData, RN = " + to_string( head.rn );
       error.message = "ds_list.New() return 0";
-      EGTSHandleAnError( error );
+      HandleAnError( error );
 #endif
       return 0;
     }
@@ -191,20 +193,20 @@ std::unique_ptr<char> TEGTSRecord::GetData( uint16_t *size )
       ds->data = std::move( sbr->GetData( &ds->size ) );
     } catch ( std::exception &e )
     {
-      egts_error_t error = {0};
-      error.sender = "TEGTSRecord::GetData, RN = " + to_string( head.rn );
-      error.message = "TEGTSSubrecord::GetData throw an exception: "
+      EGTS::error_t error = {0};
+      error.sender = "TRecord::GetData, RN = " + to_string( head.rn );
+      error.message = "TSubrecord::GetData throw an exception: "
           + ( std::string )e.what( );
-      EGTSHandleAnError( error );
+      HandleAnError( error );
       return 0;
     }
     if ( !ds->data )
     {
 #ifdef AUX_MODE
-      egts_error_t error = {0};
-      error.sender = "TEGTSRecord::GetData, RN = " + to_string( head.rn );
-      error.message = "TEGTSSubrecord::GetData return 0";
-      EGTSHandleAnError( error );
+      EGTS::error_t error = {0};
+      error.sender = "TRecord::GetData, RN = " + to_string( head.rn );
+      error.message = "TSubrecord::GetData return 0";
+      HandleAnError( error );
 #endif
       return 0;
     }
@@ -217,11 +219,11 @@ std::unique_ptr<char> TEGTSRecord::GetData( uint16_t *size )
     data = new char[*size];
   } catch ( std::exception &e )
   {
-    egts_error_t error = {0};
-    error.sender = "TEGTSRecord::GetData, RN = " + to_string( head.rn );
+    EGTS::error_t error = {0};
+    error.sender = "TRecord::GetData, RN = " + to_string( head.rn );
     error.message = "new char[" + to_string( *size ) + "] throw an exception: "
         + ( std::string )e.what( );
-    EGTSHandleAnError( error );
+    HandleAnError( error );
     return 0;
   }
   std::unique_ptr<char> pdata( data );
@@ -247,7 +249,7 @@ std::unique_ptr<char> TEGTSRecord::GetData( uint16_t *size )
   data[pos] = sst;
   data[ pos + 1 ] = rst;
   pos += 2;
-  for ( egts_data_size_t *ds = ds_list.First( ); ds; ds = ds_list.Next( ) )
+  for ( data_size_t *ds = ds_list.First( ); ds; ds = ds_list.Next( ) )
   {
     memcpy( data + pos, ds->data.get(), ds->size );
     pos += ds->size;
@@ -255,7 +257,7 @@ std::unique_ptr<char> TEGTSRecord::GetData( uint16_t *size )
   return pdata;
 }
 
-TEGTSPacket::TEGTSPacket( TEGTSPacket& pack )
+TPacket::TPacket( TPacket& pack )
 {
   Init( );
   if ( pack.head.bf.ena )
@@ -269,7 +271,7 @@ TEGTSPacket::TEGTSPacket( TEGTSPacket& pack )
   SetData( data.get( ), size );
 }
 
-void TEGTSPacket::operator =( TEGTSPacket& pack )
+void TPacket::operator =( TPacket& pack )
 {
   Init( );
   if ( pack.head.bf.ena )
@@ -283,7 +285,7 @@ void TEGTSPacket::operator =( TEGTSPacket& pack )
   SetData( data.get( ), size );
 }
 
-void TEGTSPacket::Init( )
+void TPacket::Init( )
 {
   memset( crypto_key, 0, sizeof( crypto_key ) );
   memset( &head, 0, sizeof( head ) );
@@ -297,7 +299,7 @@ void TEGTSPacket::Init( )
   recs.Clear( );
 }
 
-uint8_t TEGTSPacket::SetData( const char *data, uint32_t size, unsigned int *ppos )
+uint8_t TPacket::SetData( const char *data, uint32_t size, unsigned int *ppos )
 { // data, length of data, readed size, result - packet accepted
   if ( ppos ) *ppos = 0;
   uint32_t pos = 0, pack_size;
@@ -321,8 +323,8 @@ uint8_t TEGTSPacket::SetData( const char *data, uint32_t size, unsigned int *ppo
     if ( hcs != egts_crc8( (uint8_t*)( data + pos ), head.hl - 1 ) )
     {
 #ifdef AUX_MODE
-      egts_error_t error = {0, "TEGTSPacket::SetData", "Bad checksum of header"};
-      EGTSHandleAnError( error );
+      EGTS::error_t error = {0, "TPacket::SetData", "Bad checksum of header"};
+      HandleAnError( error );
 #endif
       return 0;
     }
@@ -333,9 +335,9 @@ uint8_t TEGTSPacket::SetData( const char *data, uint32_t size, unsigned int *ppo
     if ( sfrcs != egts_crc16( (uint8_t*)data, head.fdl ) )
     {
 #ifdef AUX_MODE
-      egts_error_t error = {0, "TEGTSPacket::SetData",
+      EGTS::error_t error = {0, "TPacket::SetData",
         "Bad checksum of service frame data"};
-      EGTSHandleAnError( error );
+      HandleAnError( error );
 #else
       return 0;
 #endif
@@ -366,7 +368,7 @@ uint8_t TEGTSPacket::SetData( const char *data, uint32_t size, unsigned int *ppo
     uint16_t offset;
     while ( pos < (uint32_t)head.fdl )
     {
-      std::unique_ptr< TEGTSRecord > rec( new TEGTSRecord );
+      std::unique_ptr< TRecord > rec( new TRecord );
       if ( !rec->SetData( data + pos, head.fdl - pos, &offset ) )
         if ( !offset ) break;
       recs.Add( rec.release( ) );
@@ -378,7 +380,7 @@ uint8_t TEGTSPacket::SetData( const char *data, uint32_t size, unsigned int *ppo
   return 0; // header not found, data up to position can be free
 }
 
-std::unique_ptr<char> TEGTSPacket::GetData( uint16_t *size )
+std::unique_ptr<char> TPacket::GetData( uint16_t *size )
 {
   *size = 0;
   uint16_t frame_size = 0;
@@ -388,17 +390,17 @@ std::unique_ptr<char> TEGTSPacket::GetData( uint16_t *size )
   }
   else if ( head.pt == EGTS_PT_SIGNED_APPDATA ) frame_size = 2 + signature.size;
   else return std::unique_ptr<char>( );
-  egts_object_list_t< egts_data_size_t > ds_list;
-  for ( TEGTSRecord* sr = recs.First( ); sr; sr = recs.Next( ) )
+  object_list_t< data_size_t > ds_list;
+  for ( TRecord* sr = recs.First( ); sr; sr = recs.Next( ) )
   { // retrieving records length and data
-    egts_data_size_t *ds = ds_list.New( );
+    data_size_t *ds = ds_list.New( );
     if ( !ds )
     {
 #ifdef AUX_MODE
-      egts_error_t error = {0};
-      error.sender = "TEGTSPacket::GetData, PID = " + to_string( head.pid );
+      EGTS::error_t error = {0};
+      error.sender = "TPacket::GetData, PID = " + to_string( head.pid );
       error.message = "ds_list.New return 0";
-      EGTSHandleAnError( error );
+      HandleAnError( error );
 #endif
       return std::unique_ptr<char>( );
     }
@@ -406,10 +408,10 @@ std::unique_ptr<char> TEGTSPacket::GetData( uint16_t *size )
     if ( !ds->data )
     {
 #ifdef AUX_MODE
-      egts_error_t error = {0};
-      error.sender = "TEGTSPacket::GetData, PID = " + to_string( head.pid );
-      error.message = "TEGTSRecord::GetData return 0";
-      EGTSHandleAnError( error );
+      EGTS::error_t error = {0};
+      error.sender = "TPacket::GetData, PID = " + to_string( head.pid );
+      error.message = "TRecord::GetData return 0";
+      HandleAnError( error );
 #endif
       return std::unique_ptr<char>( );
     }
@@ -417,10 +419,10 @@ std::unique_ptr<char> TEGTSPacket::GetData( uint16_t *size )
     if ( frame_size > EGTS_MAX_FRAME_SIZE )
     {
 #ifdef AUX_MODE
-      egts_error_t error = {0};
-      error.sender = "TEGTSPacket::GetData, PID = " + to_string( head.pid );
+      EGTS::error_t error = {0};
+      error.sender = "TPacket::GetData, PID = " + to_string( head.pid );
       error.message = "frame_size > EGTS_MAX_FRAME_SIZE";
-      EGTSHandleAnError( error );
+      HandleAnError( error );
 #endif
       return 0;
     }
@@ -440,11 +442,11 @@ std::unique_ptr<char> TEGTSPacket::GetData( uint16_t *size )
     data = new char[*size];
   } catch ( std::exception &e )
   {
-    egts_error_t error = {0};
-    error.sender = "TEGTSPacket::GetData, PID = " + to_string( head.pid );
+    EGTS::error_t error = {0};
+    error.sender = "TPacket::GetData, PID = " + to_string( head.pid );
     error.message = "new char[" + to_string( *size ) + "] throw an exception: "
         + ( std::string )e.what( );
-    EGTSHandleAnError( error );
+    HandleAnError( error );
     return 0;
   }
   std::unique_ptr<char> pdata( data );
@@ -468,7 +470,7 @@ std::unique_ptr<char> TEGTSPacket::GetData( uint16_t *size )
     if ( signature.size ) memcpy( frame_data + 2, signature.data.get( ), signature.size );
     pos = 2 + signature.size;
   }
-  for ( egts_data_size_t *ds = ds_list.First( ); ds; ds = ds_list.Next( ) )
+  for ( data_size_t *ds = ds_list.First( ); ds; ds = ds_list.Next( ) )
   {
     memcpy( frame_data + pos, ds->data.get( ), ds->size );
     pos += ds->size;

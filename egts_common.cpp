@@ -7,14 +7,16 @@
 
 #include "egts_common.h"
 
-static egts_error_handler_t error_handler;
+using namespace EGTS;
 
-void EGTSSetErrorCallback( egts_error_callback_t cb )
+static error_handler_t error_handler;
+
+void EGTS::SetErrorCallback( error_callback_t cb )
 {
   error_handler.OnError = cb;
 }
 
-void EGTSHandleAnError( egts_error_t &error )
+void EGTS::HandleAnError( error_t &error )
 {
 #ifdef THREADSAFE_MODE
   MUTEX_LOCK( error_handler.mutex );

@@ -9,7 +9,6 @@
 #define EGTS_MAX_FRAME_SIZE 65517
 #define EGTS_TERM_IN_BUF_SIZE 1024
 
-
  // packet type
 #define EGTS_PT_RESPONCE 0
 #define EGTS_PT_APPDATA 1

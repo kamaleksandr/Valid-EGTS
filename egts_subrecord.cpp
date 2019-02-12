@@ -10,6 +10,8 @@
 #include "egts_subrecord.h"
 #include "../zlib/my_zlib.h"
 
+using namespace EGTS;
+
 static uint8_t bit_cnt( uint8_t n )
 {
   n = ( ( n >> 1 ) & 0x55 ) + ( n & 0x55 );
@@ -27,26 +29,26 @@ static std::unique_ptr<char> SafeReadCString( const char *data, uint16_t len )
   return buf;
 }
 
-const char* TEGTSSubrecord::SubrecordData( const char *data, uint16_t *size )
+const char* TSubrecord::SubrecordData( const char *data, uint16_t *size )
 {
   if ( *size <= EGTS_SBR_HDR_SIZE ) return 0;
-  egts_subrec_header_t *header = (egts_subrec_header_t*)data;
+  subrec_header_t *header = (subrec_header_t*)data;
   if ( *size < header->len ) return 0;
   *size = header->len;
   return data + EGTS_SBR_HDR_SIZE;
 }
 
-char* TEGTSSubrecord::PrepareGetData( uint16_t *size )
+char* TSubrecord::PrepareGetData( uint16_t *size )
 {
   char* data = new char[*size + EGTS_SBR_HDR_SIZE];
-  egts_subrec_header_t *header = (egts_subrec_header_t*)data;
+  subrec_header_t *header = (subrec_header_t*)data;
   header->type = type; //srt
   header->len = *size; // srl
   *size += EGTS_SBR_HDR_SIZE;
   return data;
 }
 
-uint8_t TEGTSECallRawMSD::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TECallRawMSD::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   fm = data[0];
   msd.size = size - 1;
@@ -60,7 +62,7 @@ uint8_t TEGTSECallRawMSD::SetSRD( const char *data, uint16_t size, uint16_t *ppo
   return 1;
 }
 
-std::unique_ptr<char> TEGTSECallRawMSD::GetData( uint16_t *size )
+std::unique_ptr<char> TECallRawMSD::GetData( uint16_t *size )
 {
   *size = msd.size + 1;
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -70,7 +72,7 @@ std::unique_ptr<char> TEGTSECallRawMSD::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSECallMSD::TEGTSECallMSD( )
+TECallMSD::TECallMSD( )
 {
   type = EGTS_SR_MSD_DATA;
   bf.latd1 = 0x7fff;
@@ -82,7 +84,7 @@ TEGTSECallMSD::TEGTSECallMSD( )
   additional.data.reset( );
 }
 
-uint8_t TEGTSECallMSD::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TECallMSD::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < sizeof( head ) ) return 0;
   uint16_t pos = sizeof( head );
@@ -105,7 +107,7 @@ uint8_t TEGTSECallMSD::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
   return 1;
 }
 
-std::unique_ptr<char> TEGTSECallMSD::GetData( uint16_t *size )
+std::unique_ptr<char> TECallMSD::GetData( uint16_t *size )
 {
   uint8_t opt_size = 0;
   if ( bf.nop != 0xff ) opt_size = 9;
@@ -129,26 +131,26 @@ std::unique_ptr<char> TEGTSECallMSD::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSEPCompData::TEGTSEPCompData( )
+TEPCompData::TEPCompData( )
 {
   memset( &head, 0, sizeof(head ) );
   type = EGTS_SR_EP_COMP_DATA;
 }
 
-void TEGTSEPCompData::SetBlockNumber( uint16_t val )
+void TEPCompData::SetBlockNumber( uint16_t val )
 {
   head.bnl = val & 0x00ff; // 0000 0000 1111 1111
   head.bf.bnh = ( val & 0x0300 ) >> 8; // 0000 0011 0000 0000
 }
 
-uint16_t TEGTSEPCompData::GetBlockNumber( )
+uint16_t TEPCompData::GetBlockNumber( )
 {
   uint16_t val = head.bf.bnh;
   val = ( val << 8 ) + head.bnl;
   return val;
 }
 
-uint8_t TEGTSEPCompData::Compress( TEGTSSubrecord* sbr )
+uint8_t TEPCompData::Compress( TSubrecord* sbr )
 {
   head.srt = sbr->GetType( );
   std::unique_ptr<char> ptr = sbr->GetData( &head.cdl );
@@ -160,22 +162,22 @@ uint8_t TEGTSEPCompData::Compress( TEGTSSubrecord* sbr )
   return cd != 0;
 }
 
-std::unique_ptr<TEGTSSubrecord> TEGTSEPCompData::Extract( )
+std::unique_ptr<TSubrecord> TEPCompData::Extract( )
 {
-  std::unique_ptr<TEGTSSubrecord> sbr;
+  std::unique_ptr<TSubrecord> sbr;
   if ( !cd ) return sbr;
-  if ( head.srt == EGTS_SR_EP_TRACK_DATA ) sbr.reset( new TEGTSEPTrackData( ) );
-  else if ( head.srt == EGTS_SR_EP_ACCEL_DATA3 ) sbr.reset( new TEGTSEPAccelData3( ) );
+  if ( head.srt == EGTS_SR_EP_TRACK_DATA ) sbr.reset( new TEPTrackData( ) );
+  else if ( head.srt == EGTS_SR_EP_ACCEL_DATA3 ) sbr.reset( new TEPAccelData3( ) );
   else return sbr;
   uint32_t size = head.cdl;
   std::unique_ptr<char> ptr( (char*)my_zlib_inflate( (uint8_t*)cd.get( ), &size ) );
   if ( ptr )
     if ( sbr->SetSRD( (const char*)ptr.get( ), size ) )
       return sbr;
-  return std::unique_ptr<TEGTSSubrecord>( );
+  return std::unique_ptr<TSubrecord>( );
 }
 
-uint8_t TEGTSEPCompData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TEPCompData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   uint16_t pos = sizeof( head );
   if ( size < pos ) return 0;
@@ -188,7 +190,7 @@ uint8_t TEGTSEPCompData::SetSRD( const char *data, uint16_t size, uint16_t *ppos
   return 1;
 }
 
-std::unique_ptr<char> TEGTSEPCompData::GetData( uint16_t *size )
+std::unique_ptr<char> TEPCompData::GetData( uint16_t *size )
 {
   *size = sizeof( head ) + head.cdl;
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -199,42 +201,42 @@ std::unique_ptr<char> TEGTSEPCompData::GetData( uint16_t *size )
   return ptr;
 }
 
-void TEGTSEPSignData::SetBlockNumber( uint16_t val )
+void TEPSignData::SetBlockNumber( uint16_t val )
 {
   head.bnl = val & 0x00ff; // 0000 0000 1111 1111
   head.bf.bnh = ( val & 0x0300 ) >> 8; // 0000 0011 0000 0000
 }
 
-uint16_t TEGTSEPSignData::GetBlockNumber( )
+uint16_t TEPSignData::GetBlockNumber( )
 {
   uint16_t val = head.bf.bnh;
   val = ( val << 8 ) + head.bnl;
   return val;
 }
 
-void TEGTSEPSignData::SetSignLength( uint16_t val )
+void TEPSignData::SetSignLength( uint16_t val )
 {
   head.slnl = val & 0x00ff; // 0000 0000 1111 1111
   head.bf.slnh = ( val & 0x3f00 ) >> 8; // 0011 1111 0000 0000
 }
 
-uint16_t TEGTSEPSignData::GetSignLength( )
+uint16_t TEPSignData::GetSignLength( )
 {
   uint16_t val = head.bf.slnh;
   val = ( val << 8 ) + head.slnl;
   return val;
 }
 
-TEGTSEPSignature::TEGTSEPSignature( )
+TEPSignature::TEPSignature( )
 {
   ver = 1;
   sa = 0;
   type = EGTS_SR_EP_SIGNATURE;
 }
 
-uint8_t TEGTSEPSignature::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TEPSignature::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
-  const uint16_t sd_head_size = sizeof( TEGTSEPSignData::sign_data_head_t );
+  const uint16_t sd_head_size = sizeof( TEPSignData::sign_data_head_t );
   if ( 2 > size ) return 0;
   ver = data[0];
   sa = data[1];
@@ -242,7 +244,7 @@ uint8_t TEGTSEPSignature::SetSRD( const char *data, uint16_t size, uint16_t *ppo
   for ( int i = 0; i < sa; i++ )
   {
     if ( pos + sd_head_size > size ) return 0;
-    std::unique_ptr< TEGTSEPSignData > sd( new TEGTSEPSignData );
+    std::unique_ptr< TEPSignData > sd( new TEPSignData );
     memcpy( &sd->head, data + pos, sd_head_size );
     pos += sd_head_size;
     len = sd->GetSignLength( );
@@ -257,12 +259,12 @@ uint8_t TEGTSEPSignature::SetSRD( const char *data, uint16_t size, uint16_t *ppo
   return 1;
 }
 
-std::unique_ptr<char> TEGTSEPSignature::GetData( uint16_t *size )
+std::unique_ptr<char> TEPSignature::GetData( uint16_t *size )
 {
-  const uint16_t sd_head_size = sizeof( TEGTSEPSignData::sign_data_head_t );
+  const uint16_t sd_head_size = sizeof( TEPSignData::sign_data_head_t );
   *size = 2;
   sa = sd_list.Count( );
-  TEGTSEPSignData *sd = sd_list.First( );
+  TEPSignData *sd = sd_list.First( );
   for (; sd; sd = sd_list.Next( ) )
     *size += sd_head_size + sd->GetSignLength( );
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -282,7 +284,7 @@ std::unique_ptr<char> TEGTSEPSignature::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSEPAccelData3::TEGTSEPAccelData3( )
+TEPAccelData3::TEPAccelData3( )
 {
   memset( &head, 0, sizeof( head ) );
   head.bnl = 1;
@@ -290,50 +292,50 @@ TEGTSEPAccelData3::TEGTSEPAccelData3( )
   type = EGTS_SR_EP_ACCEL_DATA3;
 }
 
-void TEGTSEPAccelData3::SetBlockNumber( uint16_t val )
+void TEPAccelData3::SetBlockNumber( uint16_t val )
 {
   head.bnl = val & 0x00ff; // 0000 0000 1111 1111
   head.bf1.bnh = ( val & 0x0300 ) >> 8; // 0000 0011 0000 0000
 }
 
-uint16_t TEGTSEPAccelData3::GetBlockNumber( )
+uint16_t TEPAccelData3::GetBlockNumber( )
 {
   uint16_t val = head.bf1.bnh;
   val = ( val << 8 ) + head.bnl;
   return val;
 }
 
-void TEGTSEPAccelData3::SetTime( unsigned int val )
+void TEPAccelData3::SetTime( unsigned int val )
 {
   if ( val < 1262304000 ) head.at = 0;
   else head.at = val - 1262304000;
 }
 
-void TEGTSEPAccelData3::SetMSec( uint16_t val )
+void TEPAccelData3::SetMSec( uint16_t val )
 {
   head.atmsl = val & 0x00ff; // 0000 0000 1111 1111
   head.bf1.atmsh = ( val & 0x0100 ) >> 8; // 0000 0001 0000 0000
 }
 
-uint16_t TEGTSEPAccelData3::GetMSec( )
+uint16_t TEPAccelData3::GetMSec( )
 {
   uint16_t val = head.bf1.atmsh;
   return( val << 8 ) +head.atmsl;
 }
 
-void TEGTSEPAccelData3::SetRSA( uint16_t val )
+void TEPAccelData3::SetRSA( uint16_t val )
 {
   head.rsal = val & 0x00ff; // 0000 0000 1111 1111
   head.bf2.rsah = ( val & 0x0100 ) >> 8; // 0000 0001 0000 0000
 }
 
-uint16_t TEGTSEPAccelData3::GetRSA( )
+uint16_t TEPAccelData3::GetRSA( )
 {
   uint16_t val = head.bf2.rsah;
   return( val << 8 ) +head.rsal;
 }
 
-uint8_t TEGTSEPAccelData3::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TEPAccelData3::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   const uint16_t head_size = sizeof( head );
   const uint16_t ad_head_size = sizeof( accel_data_head_t );
@@ -358,7 +360,7 @@ uint8_t TEGTSEPAccelData3::SetSRD( const char *data, uint16_t size, uint16_t *pp
   return 1;
 }
 
-std::unique_ptr<char> TEGTSEPAccelData3::GetData( uint16_t *size )
+std::unique_ptr<char> TEPAccelData3::GetData( uint16_t *size )
 {
   const uint16_t head_size = sizeof( head );
   const uint16_t ad_head_size = sizeof( accel_data_head_t );
@@ -385,7 +387,7 @@ std::unique_ptr<char> TEGTSEPAccelData3::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSEPRelativeTrack::TEGTSEPRelativeTrack( )
+TEPRelativeTrack::TEPRelativeTrack( )
 {
   memset( &head0, 0, sizeof( head0 ) );
   memset( &body, 0, sizeof( body ) );
@@ -393,7 +395,7 @@ TEGTSEPRelativeTrack::TEGTSEPRelativeTrack( )
   spdl = 0;
 }
 
-void TEGTSEPRelativeTrack::SetLonDelta( double val )
+void TEPRelativeTrack::SetLonDelta( double val )
 {
   body.bf2.lons = val > 0 ? 1 : 0;
   uint16_t lond = fabs( val ) / 180.0 * 0xffffffff;
@@ -401,7 +403,7 @@ void TEGTSEPRelativeTrack::SetLonDelta( double val )
   body.bf2.londh = ( lond & 0x3f00 ) >> 8; // 0011 1111 0000 0000
 }
 
-double TEGTSEPRelativeTrack::GetLonDelta( )
+double TEPRelativeTrack::GetLonDelta( )
 {
   uint16_t lond = body.bf2.londh;
   lond = ( lond << 8 ) + body.londl;
@@ -409,7 +411,7 @@ double TEGTSEPRelativeTrack::GetLonDelta( )
   return(double)lond / 0xffffffff * 180;
 }
 
-void TEGTSEPRelativeTrack::SetLatDelta( double val )
+void TEPRelativeTrack::SetLatDelta( double val )
 {
   body.bf1.lats = val > 0 ? 1 : 0;
   uint16_t latd = fabs( val ) / 90.0 * 0xffffffff;
@@ -417,7 +419,7 @@ void TEGTSEPRelativeTrack::SetLatDelta( double val )
   body.bf1.latdh = ( latd & 0x3f00 ) >> 8; // 0011 1111 0000 0000
 }
 
-double TEGTSEPRelativeTrack::GetLatDelta( )
+double TEPRelativeTrack::GetLatDelta( )
 {
   uint16_t latd = body.bf1.latdh;
   latd = ( latd << 8 ) + body.latdl;
@@ -425,45 +427,45 @@ double TEGTSEPRelativeTrack::GetLatDelta( )
   return(double)latd / 0xffffffff * 90;
 }
 
-void TEGTSEPRelativeTrack::SetAltDelta( short val )
+void TEPRelativeTrack::SetAltDelta( short val )
 {
   alt.alts = val > 0 ? 1 : 0;
   alt.altd = abs( val );
 }
 
-short TEGTSEPRelativeTrack::GetAltDelta( )
+short TEPRelativeTrack::GetAltDelta( )
 {
   if ( !alt.alts ) return -alt.altd;
   return alt.altd;
 }
 
-void TEGTSEPRelativeTrack::SetSpeedDelta( uint16_t val )
+void TEPRelativeTrack::SetSpeedDelta( uint16_t val )
 {
   val *= 10;
   spdl = val & 0x00ff; // 0000 0000 1111 1111
   head1.spdh = ( val & 0x0300 ) >> 8; // 0000 0011 0000 0000
 }
 
-uint16_t TEGTSEPRelativeTrack::GetSpeedDelta( )
+uint16_t TEPRelativeTrack::GetSpeedDelta( )
 {
   uint16_t val = head1.spdh;
   val = ( val << 8 ) + spdl;
   return round( val / 10.0 );
 }
 
-void TEGTSEPRelativeTrack::SetCourse( uint16_t val )
+void TEPRelativeTrack::SetCourse( uint16_t val )
 {
   body.dirl = val & 0x00ff; // 0000 0000 1111 1111
   body.bf1.dirh = ( val & 0x0100 ) >> 8; // 0000 0001 0000 0000
 }
 
-uint16_t TEGTSEPRelativeTrack::GetCourse( )
+uint16_t TEPRelativeTrack::GetCourse( )
 {
   uint16_t val = body.bf1.dirh;
   return( val << 8 ) +body.dirl;
 }
 
-TEGTSEPTrackData::TEGTSEPTrackData( )
+TEPTrackData::TEPTrackData( )
 {
   memset( &head, 0, sizeof( head ) );
   memset( &tds, 0, sizeof( tds ) );
@@ -471,30 +473,30 @@ TEGTSEPTrackData::TEGTSEPTrackData( )
   type = EGTS_SR_EP_TRACK_DATA;
 }
 
-void TEGTSEPTrackData::SetBlockNumber( uint16_t val )
+void TEPTrackData::SetBlockNumber( uint16_t val )
 {
   head.bnl = val & 0x00ff; // 0000 0000 1111 1111
   head.bf1.bnh = ( val & 0x0300 ) >> 8; // 0000 0011 0000 0000
 }
 
-uint16_t TEGTSEPTrackData::GetBlockNumber( )
+uint16_t TEPTrackData::GetBlockNumber( )
 {
   uint16_t val = head.bf1.bnh;
   val = ( val << 8 ) + head.bnl;
   return val;
 }
 
-void TEGTSEPTrackData::SetTime( unsigned int value )
+void TEPTrackData::SetTime( unsigned int value )
 {
   if ( value < 1262304000 ) head.at = 0;
   else head.at = value - 1262304000;
 }
 
-uint8_t TEGTSEPTrackData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TEPTrackData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   const uint16_t head_size = sizeof( head );
   const uint16_t tds_size = sizeof( tds );
-  const uint16_t rt_body_size = sizeof( TEGTSEPRelativeTrack::rt_body_t );
+  const uint16_t rt_body_size = sizeof( TEPRelativeTrack::rt_body_t );
   if ( head_size > size ) return 0;
   memcpy( &head, data, head_size );
   uint16_t pos = head_size;
@@ -507,7 +509,7 @@ uint8_t TEGTSEPTrackData::SetSRD( const char *data, uint16_t size, uint16_t *ppo
   for ( int i = 0; i < head.rsa; i++ )
   {
     if ( pos + 1 > size ) return 0;
-    TEGTSEPRelativeTrack *rt = rt_list.New( );
+    TEPRelativeTrack *rt = rt_list.New( );
     memcpy( &rt->head0, data + pos, 1 );
     pos += 1;
     if ( !rt->head0.rst ) continue;
@@ -531,15 +533,15 @@ uint8_t TEGTSEPTrackData::SetSRD( const char *data, uint16_t size, uint16_t *ppo
   return 1;
 }
 
-std::unique_ptr<char> TEGTSEPTrackData::GetData( uint16_t *size )
+std::unique_ptr<char> TEPTrackData::GetData( uint16_t *size )
 {
   const uint16_t head_size = sizeof( head );
   const uint16_t tds_size = sizeof( tds );
-  const uint16_t rt_body_size = sizeof( TEGTSEPRelativeTrack::rt_body_t );
+  const uint16_t rt_body_size = sizeof( TEPRelativeTrack::rt_body_t );
   *size = head_size;
   if ( head.bf2.tde ) *size += tds_size;
   head.rsa = rt_list.Count( );
-  TEGTSEPRelativeTrack *rt = rt_list.First( );
+  TEPRelativeTrack *rt = rt_list.First( );
   for (; rt; rt = rt_list.Next( ) )
   {
     *size += 1; // rt_head_size
@@ -578,7 +580,7 @@ std::unique_ptr<char> TEGTSEPTrackData::GetData( uint16_t *size )
   return ptr;
 }
 
-void TEGTSEPTrackData::SetAltitude( int16_t val )
+void TEPTrackData::SetAltitude( int16_t val )
 {
   tds.bf.alts = val < 0 ? 1 : 0;
   val = abs( val );
@@ -586,7 +588,7 @@ void TEGTSEPTrackData::SetAltitude( int16_t val )
   tds.bf.alth = ( val & 0x3f00 ) >> 8; // 0011 1111 0000 0000
 }
 
-short TEGTSEPTrackData::GetAltitude( )
+short TEPTrackData::GetAltitude( )
 {
   short val = tds.bf.alth;
   val = ( val << 8 ) + tds.altl;
@@ -594,33 +596,33 @@ short TEGTSEPTrackData::GetAltitude( )
   return val;
 }
 
-void TEGTSEPTrackData::SetSpeed( uint16_t val )
+void TEPTrackData::SetSpeed( uint16_t val )
 {
   val *= 10;
   tds.spdl = val & 0x00ff; // 0000 0000 1111 1111
   head.bf2.spdh = ( val & 0x1f00 ) >> 8; // 0001 1111 0000 0000
 }
 
-uint16_t TEGTSEPTrackData::GetSpeed( )
+uint16_t TEPTrackData::GetSpeed( )
 {
   uint16_t val = head.bf2.spdh;
   val = ( val << 8 ) + tds.spdl;
   return round( val / 10.0 );
 }
 
-void TEGTSEPTrackData::SetCourse( uint16_t val )
+void TEPTrackData::SetCourse( uint16_t val )
 {
   tds.dirl = val & 0x00ff; // 0000 0000 1111 1111
   tds.bf.dirh = ( val & 0x0100 ) >> 8; // 0000 0001 0000 0000
 }
 
-uint16_t TEGTSEPTrackData::GetCourse( )
+uint16_t TEPTrackData::GetCourse( )
 {
   uint16_t val = tds.bf.dirh;
   return( val << 8 ) +tds.dirl;
 }
 
-TEGTSEPMainData::TEGTSEPMainData( )
+TEPMainData::TEPMainData( )
 {
   memset( &head, 0, sizeof( head ) );
   head.fv = 1;
@@ -629,65 +631,65 @@ TEGTSEPMainData::TEGTSEPMainData( )
   type = EGTS_SR_EP_MAIN_DATA;
 }
 
-void TEGTSEPMainData::SetBlockNumber( uint16_t val )
+void TEPMainData::SetBlockNumber( uint16_t val )
 {
   head.bnl = val & 0x00ff; // 0000 0000 1111 1111
   head.cn.bnh = ( val & 0x0300 ) >> 8; // 0000 0011 0000 0000
 }
 
-uint16_t TEGTSEPMainData::GetBlockNumber( )
+uint16_t TEPMainData::GetBlockNumber( )
 {
   uint16_t val = head.cn.bnh;
   val = ( val << 8 ) + head.bnl;
   return val;
 }
 
-void TEGTSEPMainData::SetMSec( uint16_t val )
+void TEPMainData::SetMSec( uint16_t val )
 {
   head.msl = val & 0x00ff; // 0000 0000 1111 1111
   head.bf.msh = ( val & 0x0300 ) >> 8; // 0000 0011 0000 0000
 }
 
-uint16_t TEGTSEPMainData::GetMSec( )
+uint16_t TEPMainData::GetMSec( )
 {
   uint16_t val = head.bf.msh;
   val = ( val << 8 ) + head.msl;
   return val;
 }
 
-void TEGTSEPMainData::SetTime( uint32_t value )
+void TEPMainData::SetTime( uint32_t value )
 {
   if ( value < 1262304000 ) head.ts = 0;
   else head.ts = value - 1262304000;
 }
 
-void TEGTSEPMainData::SetSpeed( uint16_t val )
+void TEPMainData::SetSpeed( uint16_t val )
 {
   val *= 10;
   location.spdl = val & 0x00ff; // 0000 0000 1111 1111
   location.bf.spdh = ( val & 0x1f00 ) >> 8; // 0001 1111 0000 0000
 }
 
-uint16_t TEGTSEPMainData::GetSpeed( )
+uint16_t TEPMainData::GetSpeed( )
 {
   uint16_t val = location.bf.spdh;
   val = ( val << 8 ) + location.spdl;
   return round( val / 10.0 );
 }
 
-void TEGTSEPMainData::SetCourse( uint16_t val )
+void TEPMainData::SetCourse( uint16_t val )
 {
   location.dirl = val & 0x00ff; // 0000 0000 1111 1111
   location.bf.dirh = ( val & 0x0100 ) >> 8; // 0000 0001 0000 0000
 }
 
-uint16_t TEGTSEPMainData::GetCourse( )
+uint16_t TEPMainData::GetCourse( )
 {
   uint16_t val = location.bf.dirh;
   return( val << 8 ) +location.dirl;
 }
 
-uint8_t TEGTSEPMainData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TEPMainData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   const uint16_t head_size = sizeof( head );
   const uint16_t loc_size = sizeof( location );
@@ -729,7 +731,7 @@ uint8_t TEGTSEPMainData::SetSRD( const char *data, uint16_t size, uint16_t *ppos
   return 1;
 }
 
-std::unique_ptr<char> TEGTSEPMainData::GetData( uint16_t *size )
+std::unique_ptr<char> TEPMainData::GetData( uint16_t *size )
 {
   const uint16_t head_size = sizeof( head );
   const uint16_t loc_size = sizeof( location );
@@ -768,14 +770,14 @@ std::unique_ptr<char> TEGTSEPMainData::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSRecResp::TEGTSRecResp( )
+TRecResp::TRecResp( )
 {
   type = EGTS_SR_RECORD_RESPONSE;
   crn = 0;
   rst = 0;
 }
 
-uint8_t TEGTSRecResp::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TRecResp::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 3 ) return 0;
   crn = *(uint16_t*)data;
@@ -784,7 +786,7 @@ uint8_t TEGTSRecResp::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
   return 1;
 }
 
-std::unique_ptr<char> TEGTSRecResp::GetData( uint16_t *size )
+std::unique_ptr<char> TRecResp::GetData( uint16_t *size )
 {
   *size = 3;
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -794,7 +796,7 @@ std::unique_ptr<char> TEGTSRecResp::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSTermIdent::TEGTSTermIdent( )
+TTermIdent::TTermIdent( )
 {
   type = EGTS_SR_TERM_IDENTITY;
   memset( &head, 0, sizeof( head ) );
@@ -809,7 +811,7 @@ TEGTSTermIdent::TEGTSTermIdent( )
   memcpy( msisdn, "000000000000000\0", 16 );
 }
 
-uint8_t TEGTSTermIdent::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TTermIdent::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 5 ) return 0;
   memcpy( &head, data, 5 );
@@ -855,14 +857,14 @@ uint8_t TEGTSTermIdent::SetSRD( const char *data, uint16_t size, uint16_t *ppos 
   return 1;
 }
 
-uint16_t TEGTSTermIdent::GetSize( )
+uint16_t TTermIdent::GetSize( )
 {
   return 5 + 2 * head.flags.hdide + 15 * head.flags.imeie + 16 *
       head.flags.imsie + 3 * head.flags.lngce + 3 * head.flags.nide + 2 *
       head.flags.bse + 15 * head.flags.mne;
 }
 
-std::unique_ptr<char> TEGTSTermIdent::GetData( uint16_t *size )
+std::unique_ptr<char> TTermIdent::GetData( uint16_t *size )
 {
   *size = GetSize( );
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -871,7 +873,7 @@ std::unique_ptr<char> TEGTSTermIdent::GetData( uint16_t *size )
   return ptr;
 }
 
-void TEGTSTermIdent::GetData( char* data )
+void TTermIdent::GetData( char* data )
 {
   uint16_t pos = sizeof( head );
   memcpy( data, &head, pos );
@@ -909,17 +911,17 @@ void TEGTSTermIdent::GetData( char* data )
     memcpy( data + pos, msisdn, 15 );
 }
 
-TEGTSTermIdent2::TEGTSTermIdent2( )
+TTermIdent2::TTermIdent2( )
 {
   type = EGTS_SR_TERM_IDENTITY2;
   memcpy( &flags, "0", 1 );
   memcpy( iccid, "0000000000000000000\0", 20 );
 }
 
-uint8_t TEGTSTermIdent2::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TTermIdent2::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   uint16_t pos = 0;
-  if ( !TEGTSTermIdent::SetSRD( data, size, &pos ) ) return 0;
+  if ( !TTermIdent::SetSRD( data, size, &pos ) ) return 0;
   size -= pos;
   if ( size ) memcpy( &flags, data + pos, 1 );
   if ( ppos ) *ppos = pos + 1;
@@ -929,27 +931,27 @@ uint8_t TEGTSTermIdent2::SetSRD( const char *data, uint16_t size, uint16_t *ppos
   return 1;
 }
 
-std::unique_ptr<char> TEGTSTermIdent2::GetData( uint16_t *size )
+std::unique_ptr<char> TTermIdent2::GetData( uint16_t *size )
 {
-  uint16_t base_size = TEGTSTermIdent::GetSize( );
+  uint16_t base_size = TTermIdent::GetSize( );
   *size = base_size + 1;
   if ( flags.icce ) *size += 19;
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
   char *data = ( ptr.get( ) + EGTS_SBR_HDR_SIZE );
-  TEGTSTermIdent::GetData( data );
+  TTermIdent::GetData( data );
   memcpy( data + base_size, &flags, 1 );
   if ( flags.icce ) memcpy( data + base_size + 1, &iccid, 19 );
   return ptr;
 }
 
-TEGTSDispIdent::TEGTSDispIdent( )
+TDispIdent::TDispIdent( )
 {
   type = EGTS_SR_DISPATCHER_IDENTITY;
   head.dt = 0;
   head.did = 0;
 }
 
-uint8_t TEGTSDispIdent::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TDispIdent::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 5 ) return 0;
   memcpy( &head, data, 5 );
@@ -961,7 +963,7 @@ uint8_t TEGTSDispIdent::SetSRD( const char *data, uint16_t size, uint16_t *ppos 
   return 1;
 }
 
-std::unique_ptr<char> TEGTSDispIdent::GetData( uint16_t *size )
+std::unique_ptr<char> TDispIdent::GetData( uint16_t *size )
 {
   uint8_t len = dscr.size( ) + 1;
   *size = 5 + len;
@@ -976,13 +978,13 @@ std::unique_ptr<char> TEGTSDispIdent::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSAuthParams::TEGTSAuthParams( )
+TAuthParams::TAuthParams( )
 {
   type = EGTS_SR_AUTH_PARAMS;
   memset( &flags, 0, sizeof( flags ) );
 }
 
-uint8_t TEGTSAuthParams::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TAuthParams::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 1 ) return 0;
   memcpy( &flags, data, 1 );
@@ -990,7 +992,7 @@ uint8_t TEGTSAuthParams::SetSRD( const char *data, uint16_t size, uint16_t *ppos
   return 1;
 }
 
-std::unique_ptr<char> TEGTSAuthParams::GetData( uint16_t *size )
+std::unique_ptr<char> TAuthParams::GetData( uint16_t *size )
 {
   *size = 1;
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -999,7 +1001,7 @@ std::unique_ptr<char> TEGTSAuthParams::GetData( uint16_t *size )
   return ptr;
 }
 
-uint8_t TEGTSAuthInfo::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TAuthInfo::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   user_name.clear( );
   user_pass.clear( );
@@ -1016,7 +1018,7 @@ uint8_t TEGTSAuthInfo::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
   return 1;
 }
 
-std::unique_ptr<char> TEGTSAuthInfo::GetData( uint16_t *size )
+std::unique_ptr<char> TAuthInfo::GetData( uint16_t *size )
 {
   const uint16_t user_name_size = user_name.size( ) + 1;
   const uint16_t user_pass_size = user_pass.size( ) + 1;
@@ -1034,13 +1036,13 @@ std::unique_ptr<char> TEGTSAuthInfo::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSServiceInfo::TEGTSServiceInfo( )
+TServiceInfo::TServiceInfo( )
 {
   type = EGTS_SR_SERVICE_INFO;
   memset( &body, 0, sizeof( body ) );
 }
 
-uint8_t TEGTSServiceInfo::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TServiceInfo::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   const uint16_t body_size = sizeof( body );
   if ( size < body_size ) return 0;
@@ -1049,7 +1051,7 @@ uint8_t TEGTSServiceInfo::SetSRD( const char *data, uint16_t size, uint16_t *ppo
   return 1;
 }
 
-std::unique_ptr<char> TEGTSServiceInfo::GetData( uint16_t *size )
+std::unique_ptr<char> TServiceInfo::GetData( uint16_t *size )
 {
   *size = sizeof( body );
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -1058,13 +1060,13 @@ std::unique_ptr<char> TEGTSServiceInfo::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSVehicleData::TEGTSVehicleData( )
+TVehicleData::TVehicleData( )
 {
   type = EGTS_SR_VEHICLE_DATA;
   memset( &body, 0, sizeof(body ) );
 }
 
-uint8_t TEGTSVehicleData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TVehicleData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   const uint16_t body_size = sizeof( body );
   if ( size < body_size ) return 0;
@@ -1073,7 +1075,7 @@ uint8_t TEGTSVehicleData::SetSRD( const char *data, uint16_t size, uint16_t *ppo
   return 1;
 }
 
-std::unique_ptr<char> TEGTSVehicleData::GetData( uint16_t *size )
+std::unique_ptr<char> TVehicleData::GetData( uint16_t *size )
 {
   *size = sizeof( body );
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -1082,7 +1084,7 @@ std::unique_ptr<char> TEGTSVehicleData::GetData( uint16_t *size )
   return ptr;
 }
 
-uint8_t TEGTSPlusData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TPlusData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   protobuf.data.reset( new char[size] );
   memcpy( protobuf.data.get( ), data, size );
@@ -1091,7 +1093,7 @@ uint8_t TEGTSPlusData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
   return 1;
 }
 
-TEGTSInsAccel::TEGTSInsAccel( )
+TInsAccel::TInsAccel( )
 {
   type = EGTS_SR_INSURANCE_ACCEL_DATA;
   head.hver = 0x01;
@@ -1114,9 +1116,9 @@ TEGTSInsAccel::TEGTSInsAccel( )
   memset( &z, 0, sizeof( calibration_data_t ) );
 }
 
-TEGTSSubrecord* TEGTSInsAccel::Copy( )
+TSubrecord* TInsAccel::Copy( )
 {
-  TEGTSInsAccel *acc = new TEGTSInsAccel;
+  TInsAccel *acc = new TInsAccel;
   acc->head = head;
   acc->body = body;
   acc->dl = dl;
@@ -1128,34 +1130,34 @@ TEGTSSubrecord* TEGTSInsAccel::Copy( )
   return acc;
 }
 
-void TEGTSInsAccel::SetTime( uint32_t value )
+void TInsAccel::SetTime( uint32_t value )
 { // time in utc in seconds since 2010
   if ( value < 1262304000 ) body.atm = 0;
   else body.atm = value - 1262304000;
 }
 
-uint8_t TEGTSInsAccel::GetXsize( )
+uint8_t TInsAccel::GetXsize( )
 {
   uint8_t val = ( body.xmod.adc_bits + 8 ) / 8;
   if ( val > 4 ) return 4;
   return val;
 }
 
-uint8_t TEGTSInsAccel::GetYsize( )
+uint8_t TInsAccel::GetYsize( )
 {
   uint8_t val = ( body.ymod.adc_bits + 8 ) / 8;
   if ( val > 4 ) return 4;
   return val;
 }
 
-uint8_t TEGTSInsAccel::GetZsize( )
+uint8_t TInsAccel::GetZsize( )
 {
   uint8_t val = ( body.zmod.adc_bits + 8 ) / 8;
   if ( val > 4 ) return 4;
   return val;
 }
 
-uint8_t TEGTSInsAccel::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TInsAccel::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 4 ) return 0;
   memcpy( &head, data, 4 );
@@ -1191,7 +1193,7 @@ uint8_t TEGTSInsAccel::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
   return 1;
 }
 
-std::unique_ptr<char> TEGTSInsAccel::GetData( uint16_t *size )
+std::unique_ptr<char> TInsAccel::GetData( uint16_t *size )
 {
   *size = sizeof( head );
   if ( !head.pid )
@@ -1231,7 +1233,7 @@ std::unique_ptr<char> TEGTSInsAccel::GetData( uint16_t *size )
   return ptr;
 }
 
-std::unique_ptr<char> TEGTSPlusData::GetData( uint16_t *size )
+std::unique_ptr<char> TPlusData::GetData( uint16_t *size )
 {
   *size = protobuf.size;
   if ( !protobuf.size ) return 0;
@@ -1242,7 +1244,7 @@ std::unique_ptr<char> TEGTSPlusData::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSPosData::TEGTSPosData( )
+TPosData::TPosData( )
 {
   type = EGTS_SR_POS_DATA;
   memset( &body, 0, sizeof( body ) );
@@ -1251,59 +1253,59 @@ TEGTSPosData::TEGTSPosData( )
   srcd = 0;
 }
 
-void TEGTSPosData::SetTime( uint32_t value )
+void TPosData::SetTime( uint32_t value )
 {
   if ( value < 1262304000 ) body.ntm = 0;
   else body.ntm = value - 1262304000;
 }
 
-void TEGTSPosData::SetSpeed( uint16_t val )
+void TPosData::SetSpeed( uint16_t val )
 {
   val *= 10;
   body.spd = val & 0x00ff; // 0000 0000 1111 1111
   body.bf.spd = ( val & 0x3f00 ) >> 8; // 0011 1111 0000 0000
 }
 
-uint16_t TEGTSPosData::GetSpeed( )
+uint16_t TPosData::GetSpeed( )
 {
   uint16_t val = body.bf.spd;
   val = ( val << 8 ) + body.spd;
   return round( val / 10.0 );
 }
 
-void TEGTSPosData::SetCourse( uint16_t val )
+void TPosData::SetCourse( uint16_t val )
 {
   body.dir = val & 0x00ff; // 0000 0000 1111 1111
   body.bf.dirh = ( val & 0x0100 ) >> 8; // 0000 0001 0000 0000
 }
 
-uint16_t TEGTSPosData::GetCourse( )
+uint16_t TPosData::GetCourse( )
 {
   uint16_t val = body.bf.dirh;
   return( val << 8 ) +body.dir;
 }
 
-void TEGTSPosData::SetOdometer( uint32_t val )
+void TPosData::SetOdometer( uint32_t val )
 {
   val = round( val / 100.0 );
   memcpy( body.odm, &val, 3 );
 }
 
-uint32_t TEGTSPosData::GetOdometer( )
+uint32_t TPosData::GetOdometer( )
 {
   uint32_t val = 0;
   memcpy( &val, body.odm, 3 );
   return val * 100;
 }
 
-void TEGTSPosData::SetAltitude( int val )
+void TPosData::SetAltitude( int val )
 {
   body.flags.alte = 1;
   body.bf.alts = ( val < 0 );
   memcpy( alt, &val, 3 );
 }
 
-int TEGTSPosData::GetAltitude( )
+int TPosData::GetAltitude( )
 {
   int val = 0;
   memcpy( &val, alt, 3 );
@@ -1311,7 +1313,7 @@ int TEGTSPosData::GetAltitude( )
   else return val;
 }
 
-uint8_t TEGTSPosData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TPosData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   uint16_t body_size = sizeof( body );
   if ( size < body_size ) return 0;
@@ -1328,7 +1330,7 @@ uint8_t TEGTSPosData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
   return 1;
 }
 
-std::unique_ptr<char> TEGTSPosData::GetData( uint16_t *size )
+std::unique_ptr<char> TPosData::GetData( uint16_t *size )
 {
   *size = 0;
   uint16_t body_size = sizeof( body );
@@ -1346,7 +1348,7 @@ std::unique_ptr<char> TEGTSPosData::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSExtPosData::TEGTSExtPosData( )
+TExtPosData::TExtPosData( )
 {
   type = EGTS_SR_EXT_POS_DATA;
   uint8_t val = 0;
@@ -1358,7 +1360,7 @@ TEGTSExtPosData::TEGTSExtPosData( )
   ns = 0;
 }
 
-uint8_t TEGTSExtPosData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TExtPosData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 1 ) return 0;
   memcpy( &flags, data, 1 );
@@ -1394,7 +1396,7 @@ uint8_t TEGTSExtPosData::SetSRD( const char *data, uint16_t size, uint16_t *ppos
   return 1;
 }
 
-std::unique_ptr<char> TEGTSExtPosData::GetData( uint16_t *size )
+std::unique_ptr<char> TExtPosData::GetData( uint16_t *size )
 {
   if ( flags.sfe ) flags.nsfe = 1;
   *size = 1 + 2 * flags.vfe + 2 * flags.hfe + 2 * flags.pfe + 1 * flags.sfe + 2 * flags.nsfe;
@@ -1430,7 +1432,7 @@ std::unique_ptr<char> TEGTSExtPosData::GetData( uint16_t *size )
   return ptr;
 }
 
-uint8_t TEGTSResultCode::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TResultCode::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 1 ) return 0;
   if ( ppos ) *ppos = 1;
@@ -1438,7 +1440,7 @@ uint8_t TEGTSResultCode::SetSRD( const char *data, uint16_t size, uint16_t *ppos
   return 1;
 }
 
-std::unique_ptr<char> TEGTSResultCode::GetData( uint16_t *size )
+std::unique_ptr<char> TResultCode::GetData( uint16_t *size )
 {
   *size = 1;
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -1447,7 +1449,7 @@ std::unique_ptr<char> TEGTSResultCode::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSAdSensors::TEGTSAdSensors( ) // EGTS_SR_AD_SENSORS_DATA
+TAdSensors::TAdSensors( ) // EGTS_SR_AD_SENSORS_DATA
 {
   type = EGTS_SR_AD_SENSORS_DATA;
   memset( &dins, 0, 8 );
@@ -1455,27 +1457,27 @@ TEGTSAdSensors::TEGTSAdSensors( ) // EGTS_SR_AD_SENSORS_DATA
   memset( &head, 0, 3 );
 }
 
-void TEGTSAdSensors::SetDin( uint8_t num, uint8_t val )
+void TAdSensors::SetDin( uint8_t num, uint8_t val )
 {
   if ( num > 7 ) return;
   dins[num] = val;
   head.dinfe.val |= ( 1 << num );
 }
 
-uint8_t TEGTSAdSensors::GetDin( uint8_t num )
+uint8_t TAdSensors::GetDin( uint8_t num )
 {
   if ( num > 7 ) return 0;
   return dins[num];
 }
 
-void TEGTSAdSensors::SetAin( uint8_t num, uint32_t val )
+void TAdSensors::SetAin( uint8_t num, uint32_t val )
 {
   if ( num > 7 ) return;
   memcpy( ains + num * 3, &val, 3 );
   head.ainfe.val |= ( 1 << num );
 }
 
-uint32_t TEGTSAdSensors::GetAin( uint8_t num )
+uint32_t TAdSensors::GetAin( uint8_t num )
 {
   if ( num > 7 ) return 0;
   uint32_t val = 0;
@@ -1483,7 +1485,7 @@ uint32_t TEGTSAdSensors::GetAin( uint8_t num )
   return val;
 }
 
-uint8_t TEGTSAdSensors::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TAdSensors::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 3 ) return 0;
   memcpy( &head, data, 3 );
@@ -1505,7 +1507,7 @@ uint8_t TEGTSAdSensors::SetSRD( const char *data, uint16_t size, uint16_t *ppos 
   return 1;
 }
 
-std::unique_ptr<char> TEGTSAdSensors::GetData( uint16_t *size )
+std::unique_ptr<char> TAdSensors::GetData( uint16_t *size )
 {
   *size = 3 + bit_cnt( head.dinfe.val ) + bit_cnt( head.ainfe.val ) * 3;
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -1526,21 +1528,21 @@ std::unique_ptr<char> TEGTSAdSensors::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSCounters::TEGTSCounters( ) // EGTS_SR_COUNTERS_DATA
+TCounters::TCounters( ) // EGTS_SR_COUNTERS_DATA
 {
   type = EGTS_SR_COUNTERS_DATA;
   memset( cnts, 0, 24 );
   memset( &flags, 0, 1 );
 }
 
-void TEGTSCounters::SetCounter( uint8_t num, uint32_t val )
+void TCounters::SetCounter( uint8_t num, uint32_t val )
 {
   if ( num > 7 ) return;
   memcpy( cnts + num * 3, &val, 3 );
   cntfe |= ( 1 << num );
 }
 
-uint32_t TEGTSCounters::GetCounter( uint8_t num )
+uint32_t TCounters::GetCounter( uint8_t num )
 {
   if ( num > 7 ) return 0;
   uint32_t val = 0;
@@ -1548,7 +1550,7 @@ uint32_t TEGTSCounters::GetCounter( uint8_t num )
   return val;
 }
 
-uint8_t TEGTSCounters::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TCounters::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 1 ) return 0;
   memcpy( &cntfe, data, 1 );
@@ -1564,7 +1566,7 @@ uint8_t TEGTSCounters::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
   return 1;
 }
 
-std::unique_ptr<char> TEGTSCounters::GetData( uint16_t *size )
+std::unique_ptr<char> TCounters::GetData( uint16_t *size )
 {
   *size = 1 + bit_cnt( cntfe ) * 3;
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -1580,13 +1582,13 @@ std::unique_ptr<char> TEGTSCounters::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSStateData::TEGTSStateData( )
+TStateData::TStateData( )
 {
   type = EGTS_SR_STATE_DATA;
   memset( &body, 0, 5 );
 }
 
-uint8_t TEGTSStateData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TStateData::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 5 ) return 0;
   if ( ppos ) *ppos = 5;
@@ -1594,7 +1596,7 @@ uint8_t TEGTSStateData::SetSRD( const char *data, uint16_t size, uint16_t *ppos 
   return 1;
 }
 
-std::unique_ptr<char> TEGTSStateData::GetData( uint16_t *size )
+std::unique_ptr<char> TStateData::GetData( uint16_t *size )
 {
   *size = 5;
   std::unique_ptr<char> ptr( PrepareGetData( size ) );
@@ -1603,13 +1605,13 @@ std::unique_ptr<char> TEGTSStateData::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSLiquidLevel::TEGTSLiquidLevel( )
+TLiquidLevel::TLiquidLevel( )
 {
   type = EGTS_SR_LIQUID_LEVEL_SENSOR;
   memset( &head.flags, 0, 3 );
 }
 
-uint8_t TEGTSLiquidLevel::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TLiquidLevel::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 3 ) return 0;
   llcd.size = size - 3;
@@ -1621,7 +1623,7 @@ uint8_t TEGTSLiquidLevel::SetSRD( const char *data, uint16_t size, uint16_t *ppo
   return 1;
 }
 
-std::unique_ptr<char> TEGTSLiquidLevel::GetData( uint16_t *size )
+std::unique_ptr<char> TLiquidLevel::GetData( uint16_t *size )
 {
   if ( llcd.size > 512 ) return 0;
   if ( !llcd.data ) return 0;
@@ -1633,13 +1635,13 @@ std::unique_ptr<char> TEGTSLiquidLevel::GetData( uint16_t *size )
   return ptr;
 }
 
-TEGTSPassengers::TEGTSPassengers( )
+TPassengers::TPassengers( )
 {
   type = EGTS_SR_PASSENGERS_COUNTERS;
   memset( &head, 0, 5 );
 }
 
-uint8_t TEGTSPassengers::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
+uint8_t TPassengers::SetSRD( const char *data, uint16_t size, uint16_t *ppos )
 {
   if ( size < 5 ) return 0;
   if ( ppos ) *ppos = size;
@@ -1657,7 +1659,7 @@ uint8_t TEGTSPassengers::SetSRD( const char *data, uint16_t size, uint16_t *ppos
   return 1;
 }
 
-std::unique_ptr<char> TEGTSPassengers::GetData( uint16_t *size )
+std::unique_ptr<char> TPassengers::GetData( uint16_t *size )
 {
   *size = 5 + doors.Count( ) * 2;
   std::unique_ptr<char> ptr( PrepareGetData( size ) );

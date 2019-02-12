@@ -16,16 +16,19 @@
 
 #include "egts_common.h"
 
-class TEGTSSubrecord
+namespace EGTS
+{
+
+class TSubrecord
 {
 protected:
   uint8_t type;
   char* PrepareGetData( uint16_t *size );
   
 public:
-  TEGTSSubrecord( ){ type = 0; }
-  virtual ~TEGTSSubrecord( ){}
-  virtual TEGTSSubrecord* Copy(){ return 0; }
+  TSubrecord( ){ type = 0; }
+  virtual ~TSubrecord( ){}
+  virtual TSubrecord* Copy(){ return 0; }
   uint8_t GetType(){ return type; }
   const char* SubrecordData( const char *data, uint16_t *size );
   virtual uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 )
@@ -34,13 +37,15 @@ public:
   { return std::unique_ptr<char>(); }
 };
 
-class TEGTSECallRawMSD : public TEGTSSubrecord  // EGTS_SR_RAW_MSD_DATA
+
+  
+class TECallRawMSD : public TSubrecord  // EGTS_SR_RAW_MSD_DATA
 {
 public:
-  TEGTSECallRawMSD(){ type = EGTS_SR_RAW_MSD_DATA; fm = 0; }
-  ~TEGTSECallRawMSD(){}
+  TECallRawMSD(){ type = EGTS_SR_RAW_MSD_DATA; fm = 0; }
+  ~TECallRawMSD(){}
   uint8_t fm;
-  egts_data_size_t msd;
+  EGTS::data_size_t msd;
 #if __cplusplus > 199711L
   uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 ) override;
   std::unique_ptr<char> GetData( uint16_t *size ) override;
@@ -50,11 +55,11 @@ public:
 #endif  
 };
 
-class TEGTSECallMSD : public TEGTSSubrecord // EGTS_SR_MSD_DATA
+class TECallMSD : public TSubrecord // EGTS_SR_MSD_DATA
 {
 public:
-  TEGTSECallMSD();
-  ~TEGTSECallMSD(){}
+  TECallMSD();
+  ~TECallMSD(){}
 #pragma pack(push,1)
   struct
   {
@@ -80,7 +85,7 @@ public:
     uint8_t nop;
   } bf;
 #pragma pack(pop)
-  egts_data_size_t additional;
+  EGTS::data_size_t additional;
 
   void SetTime( uint32_t val ){ head.ts = htonl( val ); }
   uint32_t GetTime( ){ return ntohl( head.ts ); }
@@ -103,11 +108,11 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSEPCompData : public TEGTSSubrecord // EGTS_SR_EP_COMP_DATA
+class TEPCompData : public TSubrecord // EGTS_SR_EP_COMP_DATA
 {
 public:
-  TEGTSEPCompData( );
-  ~TEGTSEPCompData( ) { }
+  TEPCompData( );
+  ~TEPCompData( ) { }
 #pragma pack(push,1)
   struct
   {
@@ -125,16 +130,16 @@ public:
   std::unique_ptr<char> cd;
   void SetBlockNumber( uint16_t value );
   uint16_t GetBlockNumber( );
-  std::unique_ptr<TEGTSSubrecord> Extract();
-  uint8_t Compress( TEGTSSubrecord* );
+  std::unique_ptr<TSubrecord> Extract();
+  uint8_t Compress( TSubrecord* );
   uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSEPSignData
+class TEPSignData
 {
 public:
-	TEGTSEPSignData(){ memset( &head, 0, sizeof( head ) ); }
+	TEPSignData(){ memset( &head, 0, sizeof( head ) ); }
 #pragma pack(push,1)
   struct sign_data_head_t
   {
@@ -156,23 +161,23 @@ public:
   uint16_t GetSignLength( );
 };
 
-class TEGTSEPSignature : public TEGTSSubrecord // EGTS_SR_EP_SIGNATURE
+class TEPSignature : public TSubrecord // EGTS_SR_EP_SIGNATURE
 {
 public:
-  TEGTSEPSignature( );
-  ~TEGTSEPSignature( ){}
+  TEPSignature( );
+  ~TEPSignature( ){}
   uint8_t ver;
   uint8_t sa;
-  egts_object_list_t< TEGTSEPSignData > sd_list;
+  EGTS::object_list_t< TEPSignData > sd_list;
   uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSEPAccelData3 : public TEGTSSubrecord //EGTS_SR_EP_ACCEL_DATA3
+class TEPAccelData3 : public TSubrecord //EGTS_SR_EP_ACCEL_DATA3
 {
 public:
-	TEGTSEPAccelData3();
-	~TEGTSEPAccelData3(){ }
+	TEPAccelData3();
+	~TEPAccelData3(){ }
 #pragma pack(push,1)
   struct accel_data_head_t
   {
@@ -214,7 +219,7 @@ public:
     accel_data_head_t head;
     accel_data_struct_t ads;
   };
-  egts_object_list_t< accel_data_t > ad_list;
+  EGTS::object_list_t< accel_data_t > ad_list;
 
   void SetBlockNumber( uint16_t value );
   uint16_t GetBlockNumber( );
@@ -229,10 +234,10 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSEPRelativeTrack
+class TEPRelativeTrack
 {
 public:
-  TEGTSEPRelativeTrack( );
+  TEPRelativeTrack( );
 #pragma pack(push,1)
   union
   {
@@ -289,11 +294,11 @@ public:
   uint16_t GetCourse( );
 };
 
-class TEGTSEPTrackData : public TEGTSSubrecord // EGTS_SR_EP_TRACK_DATA
+class TEPTrackData : public TSubrecord // EGTS_SR_EP_TRACK_DATA
 {
 public:
-  TEGTSEPTrackData();
-  ~TEGTSEPTrackData(){}
+  TEPTrackData();
+  ~TEPTrackData(){}
 #pragma pack(push,1)
   struct
   {
@@ -331,7 +336,7 @@ public:
   } tds;
 #pragma pack(pop)
 
-  egts_object_list_t< TEGTSEPRelativeTrack > rt_list;
+  EGTS::object_list_t< TEPRelativeTrack > rt_list;
   void SetBlockNumber( uint16_t value );
   uint16_t GetBlockNumber( );
   void SetTime( uint32_t value );
@@ -351,10 +356,10 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSEPMainData : public TEGTSSubrecord // EGTS_SR_EP_MAIN_DATA
+class TEPMainData : public TSubrecord // EGTS_SR_EP_MAIN_DATA
 {
 public:
-  TEGTSEPMainData( );
+  TEPMainData( );
 #pragma pack(push,1)
   struct
   {
@@ -410,7 +415,7 @@ public:
     uint8_t ss;
   };
 #pragma pack(pop)
-  egts_object_list_t< base_station_t > stations;
+  EGTS::object_list_t< base_station_t > stations;
   uint8_t epevc;
   std::deque< uint32_t > events;
 
@@ -433,10 +438,10 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSRecResp : public TEGTSSubrecord  // EGTS_SR_RECORD_RESPONSE
+class TRecResp : public TSubrecord  // EGTS_SR_RECORD_RESPONSE
 {
 public:
-  TEGTSRecResp();
+  TRecResp();
   uint16_t crn;
   uint8_t rst;
   
@@ -444,11 +449,11 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSTermIdent : public TEGTSSubrecord // EGTS_SR_TERM_IDENTITY
+class TTermIdent : public TSubrecord // EGTS_SR_TERM_IDENTITY
 {
 public:
-  TEGTSTermIdent( );
-  ~TEGTSTermIdent( ){}
+  TTermIdent( );
+  ~TTermIdent( ){}
 #pragma pack( push, 1 )
   struct
   {
@@ -485,10 +490,10 @@ protected:
   uint16_t GetSize( ); 
 };
 
-class TEGTSTermIdent2 : public TEGTSTermIdent //EGTS_SR_TERM_IDENTITY2
+class TTermIdent2 : public TTermIdent //EGTS_SR_TERM_IDENTITY2
 {
 public:
-  TEGTSTermIdent2( );
+  TTermIdent2( );
 #pragma pack( push, 1 )
   struct
   {
@@ -498,13 +503,13 @@ public:
   char iccid[20];
 #pragma pack(pop)
   uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  std::unique_ptr<char> GetData( uint16_t *size ) override final;
 };
 
-class TEGTSDispIdent : public TEGTSSubrecord // EGTS_SR_DISPATCHER_IDENTITY
+class TDispIdent : public TSubrecord // EGTS_SR_DISPATCHER_IDENTITY
 {
 public:
-  TEGTSDispIdent();
+  TDispIdent();
 #pragma pack(push,1)
   struct
   {
@@ -517,10 +522,10 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSAuthParams : public TEGTSSubrecord // EGTS_SR_AUTH_PARAMS
+class TAuthParams : public TSubrecord // EGTS_SR_AUTH_PARAMS
 {
 public:
-	TEGTSAuthParams();
+	TAuthParams();
 #pragma pack(push,1)
   struct
 	{
@@ -537,10 +542,10 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSAuthInfo : public TEGTSSubrecord // EGTS_SR_AUTH_INFO
+class TAuthInfo : public TSubrecord // EGTS_SR_AUTH_INFO
 {
 public:
-  TEGTSAuthInfo( ){ type = EGTS_SR_AUTH_INFO; }
+  TAuthInfo( ){ type = EGTS_SR_AUTH_INFO; }
   std::string user_name;
   std::string user_pass;
   std::string server_sequence;
@@ -548,10 +553,10 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSServiceInfo : public TEGTSSubrecord //EGTS_SR_SERVICE_INFO
+class TServiceInfo : public TSubrecord //EGTS_SR_SERVICE_INFO
 {
 public:
-  TEGTSServiceInfo();
+  TServiceInfo();
 #pragma pack(push,1)
   struct
   {
@@ -569,10 +574,10 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSVehicleData : public TEGTSSubrecord // EGTS_SR_VEHICLE_DATA
+class TVehicleData : public TSubrecord // EGTS_SR_VEHICLE_DATA
 {
 public:
-  TEGTSVehicleData( );
+  TVehicleData( );
 #pragma pack(push,1)
   struct
   {
@@ -585,20 +590,20 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSResultCode : public TEGTSSubrecord // EGTS_SR_RESULT_CODE
+class TResultCode : public TSubrecord // EGTS_SR_RESULT_CODE
 {
 public:
-  TEGTSResultCode( ){ type = EGTS_SR_RESULT_CODE; rcd = 0; }
+  TResultCode( ){ type = EGTS_SR_RESULT_CODE; rcd = 0; }
   uint8_t rcd;
   uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSInsAccel : public TEGTSSubrecord // EGTS_SR_INSURANCE_ACCEL_DATA
+class TInsAccel : public TSubrecord // EGTS_SR_INSURANCE_ACCEL_DATA
 {
 public:
-  TEGTSInsAccel( );
-  TEGTSSubrecord* Copy();
+  TInsAccel( );
+  TSubrecord* Copy();
 #pragma pack(push,1)
   struct mod_xyz_t
   {
@@ -646,19 +651,19 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSPlusData : public TEGTSSubrecord // EGTS_SR_EGTSPLUS_DATA
+class TPlusData : public TSubrecord // EGTS_SR_EGTSPLUS_DATA
 {
 public:
-  TEGTSPlusData(){ type = EGTS_SR_EGTSPLUS_DATA; }
-  egts_data_size_t protobuf;
+  TPlusData(){ type = EGTS_SR_EGTSPLUS_DATA; }
+  EGTS::data_size_t protobuf;
   uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSPosData : public TEGTSSubrecord // EGTS_SR_POS_DATA
+class TPosData : public TSubrecord // EGTS_SR_POS_DATA
 {
 public:
-  TEGTSPosData( );
+  TPosData( );
 #pragma pack(push,1)
   struct
   {
@@ -710,10 +715,10 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSExtPosData : public TEGTSSubrecord // EGTS_SR_EXT_POS_DATA
+class TExtPosData : public TSubrecord // EGTS_SR_EXT_POS_DATA
 {
 public:
-  TEGTSExtPosData();
+  TExtPosData();
 #pragma pack(push,1)
   struct
   {
@@ -735,13 +740,13 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSAdSensors : public TEGTSSubrecord // EGTS_SR_AD_SENSORS_DATA
+class TAdSensors : public TSubrecord // EGTS_SR_AD_SENSORS_DATA
 {
 private:
   uint8_t dins[8];
   uint8_t ains[24];
 public:
-  TEGTSAdSensors( );
+  TAdSensors( );
 #pragma pack(push,1)
   struct
   {
@@ -788,12 +793,12 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSCounters : public TEGTSSubrecord // EGTS_SR_COUNTERS_DATA
+class TCounters : public TSubrecord // EGTS_SR_COUNTERS_DATA
 {
 private:
   char cnts[24];
 public:
-  TEGTSCounters( );
+  TCounters( );
 #pragma pack(push,1)
   union
   {
@@ -817,10 +822,10 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSStateData : public TEGTSSubrecord // EGTS_SR_STATE_DATA
+class TStateData : public TSubrecord // EGTS_SR_STATE_DATA
 {
 public:
-	TEGTSStateData();
+	TStateData();
 #pragma pack(push,1)
   struct
   {
@@ -841,10 +846,10 @@ public:
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSLiquidLevel : public TEGTSSubrecord // EGTS_SR_LIQUID_LEVEL_SENSOR
+class TLiquidLevel : public TSubrecord // EGTS_SR_LIQUID_LEVEL_SENSOR
 {
 public:
-  TEGTSLiquidLevel();
+  TLiquidLevel();
 #pragma pack(push,1)
   struct
   {
@@ -859,15 +864,16 @@ public:
     uint16_t maddr;
   } head;
 #pragma pack(pop)
-  egts_data_size_t llcd;
+  EGTS::data_size_t llcd;
   uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSPassengers : public TEGTSSubrecord // EGTS_SR_PASSENGERS_COUNTERS
+
+class TPassengers : public TSubrecord // EGTS_SR_PASSENGERS_COUNTERS
 {
 public:
-  TEGTSPassengers();
+  TPassengers();
 #pragma pack(push,1)
   struct
   {
@@ -919,10 +925,10 @@ public:
     uint8_t num;
     door_t door;
   };
-  egts_object_list_t< door_num_t > doors;
+  EGTS::object_list_t< door_num_t > doors;
 
   uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
   std::unique_ptr<char> GetData( uint16_t *size );
 };
-
+}
 #endif

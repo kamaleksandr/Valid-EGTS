@@ -10,13 +10,13 @@
 
 #include "egts_subrecord.h"
 
-class TEGTSRecord
+class TRecord
 {
 private:
-  TEGTSSubrecord* GetInheritor( uint8_t );
+  EGTS::TSubrecord* GetInheritor( uint8_t );
 public:
-  TEGTSRecord();
-  ~TEGTSRecord() { }
+  TRecord();
+  ~TRecord() { }
 #pragma pack(push,1)
   struct
   {
@@ -39,22 +39,22 @@ public:
   unsigned int tm; // time in seconds from 00:00:00 01.01.2010 utc
   uint8_t sst; // sender service type ID
   uint8_t rst; // recipient service type ID
-  egts_object_list_t< TEGTSSubrecord > sbrs;
+  EGTS::object_list_t< EGTS::TSubrecord > sbrs;
   uint8_t SetData( const char *data, uint16_t size, uint16_t *ppos = 0 );
   std::unique_ptr<char> GetData( uint16_t *size );
 };
 
-class TEGTSPacket
+class TPacket
 {
 public:
-  TEGTSPacket(){ Init( ); }
-  TEGTSPacket( TEGTSPacket& );
-  void operator=(TEGTSPacket&);
+  TPacket(){ Init( ); }
+  TPacket( TPacket& );
+  void operator=(TPacket&);
   void Init( );
   uint16_t rpid; // ID of the request packet
   uint8_t pr; // processing result code
   char crypto_key[8];
-  egts_data_size_t signature; // digital signature
+  EGTS::data_size_t signature; // digital signature
 #pragma pack(push,1)
   struct
   {
@@ -81,7 +81,7 @@ public:
     uint8_t ttl; // package life time
   } route;
 #pragma pack(pop)
-  egts_object_list_t< TEGTSRecord > recs;
+  EGTS::object_list_t< TRecord > recs;
   uint8_t SetData( const char *data, uint32_t size, uint32_t *pos = 0 );
   std::unique_ptr<char> GetData( uint16_t *size );
 };

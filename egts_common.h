@@ -25,7 +25,7 @@
 #define THREAD_ID pthread_self()
 #endif
 
-#define EGTS_SBR_HDR_SIZE sizeof( egts_subrec_header_t )
+#define EGTS_SBR_HDR_SIZE sizeof( subrec_header_t )
 
 #include <stdint.h>
 #include <string.h>
@@ -33,59 +33,62 @@
 #include <deque>
 #include "egts_defines.h"
 
-struct egts_error_t
+namespace EGTS
+{
+
+struct error_t
 {
   uint32_t code;
   std::string sender;
   std::string message;
 };
 
-typedef void (*egts_error_callback_t)(egts_error_t*) ;
+typedef void (*error_callback_t)(error_t*) ;
 
-struct egts_error_handler_t
+struct error_handler_t
 {
-  egts_error_callback_t OnError;
-  egts_error_t error;
+  error_callback_t OnError;
+  EGTS::error_t error;
 #ifdef THREADSAFE_MODE
-  egts_error_handler_t( )
+  error_handler_t( )
   {
     MUTEX_SETUP( mutex );
     OnError = 0;
   }
-  ~egts_error_handler_t( ){ MUTEX_CLEANUP( mutex ); }
+  ~error_handler_t( ){ MUTEX_CLEANUP( mutex ); }
   MUTEX_TYPE mutex;
 #else
-  egts_error_handler_t( ){ OnError = 0; }
+  error_handler_t( ){ OnError = 0; }
 #endif
 };
 
-void EGTSSetErrorCallback( egts_error_callback_t );
-void EGTSHandleAnError( egts_error_t &error );
+void SetErrorCallback( error_callback_t );
+void HandleAnError( error_t &error );
 
 #pragma pack( push, 1 )
-struct egts_subrec_header_t
+struct subrec_header_t
 {
   uint8_t type;
   uint16_t len;
 };
 #pragma pack( pop )
 
-struct egts_data_size_t
+struct data_size_t
 {
-  egts_data_size_t( ){ size = 0; }
+  data_size_t( ){ size = 0; }
   std::unique_ptr<char> data;
   uint16_t size;
 };
 
 template<class T>
-class egts_object_list_t
+class object_list_t
 {
 private:
   std::deque< T* > list;
   typename std::deque< T* >::iterator it;
 public:
-  egts_object_list_t( ){ it = list.end( ); }
-  ~egts_object_list_t( ){ Clear( ); }
+  object_list_t( ){ it = list.end( ); }
+  ~object_list_t( ){ Clear( ); }
   uint32_t Count( ){ return list.size( ); }
   void Clear( )
   {
@@ -98,8 +101,8 @@ public:
     try { list.push_back( new T ); }
     catch ( std::exception &e )
     {
-      egts_error_t error = {0, "egts_object_list_t", e.what( )};
-      EGTSHandleAnError( error );
+      EGTS::error_t error = {0, "object_list_t", e.what( )};
+      HandleAnError( error );
       return 0;
     }
     return list.back( );
@@ -130,7 +133,7 @@ public:
     return *it;
   }
 };
-
+}
 #endif /* COMMON_H */
 
 
