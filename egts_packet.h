@@ -10,6 +10,9 @@
 
 #include "egts_subrecord.h"
 
+namespace EGTS
+{
+
 class TRecord
 {
 private:
@@ -85,4 +88,6 @@ public:
   uint8_t SetData( const char *data, uint32_t size, uint32_t *pos = 0 );
   std::unique_ptr<char> GetData( uint16_t *size );
 };
+
+} //namespace EGTS
 #endif
