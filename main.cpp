@@ -12,7 +12,7 @@
 using namespace std;
 using namespace EGTS;
 
-static void OnError( EGTS::error_t* error )
+void OnError( EGTS::error_t* error )
 {
   std::cout << "Error, sender: " << error->sender.c_str( );
   std::cout << "; message: " << error->message.c_str( ) << ";\r\n";
