@@ -13,7 +13,7 @@
 
 using namespace EGTS;
 
-std::string to_string( int32_t val )
+static std::string to_string( int32_t val )
 {
   std::stringstream ss;
   ss << val;

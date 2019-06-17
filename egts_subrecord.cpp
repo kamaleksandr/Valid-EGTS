@@ -12,7 +12,7 @@
 
 using namespace EGTS;
 
-uint8_t bit_cnt( uint8_t n )
+static uint8_t bit_cnt( uint8_t n )
 {
   n = ( ( n >> 1 ) & 0x55 ) + ( n & 0x55 );
   n = ( ( n >> 2 ) & 0x33 ) + ( n & 0x33 );
@@ -20,7 +20,7 @@ uint8_t bit_cnt( uint8_t n )
   return n;
 }
 
-std::unique_ptr<char> SafeReadCString( const char *data, uint16_t len )
+static std::unique_ptr<char> SafeReadCString( const char *data, uint16_t len )
 {
   if ( !len ) return 0;
   std::unique_ptr<char> buf( new char[len + 1] );
