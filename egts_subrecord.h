@@ -37,8 +37,6 @@ public:
   { return std::unique_ptr<char>(); }
 };
 
-
-  
 class TECallRawMSD : public TSubrecord  // EGTS_SR_RAW_MSD_DATA
 {
 public:
@@ -679,13 +677,13 @@ public:
       uint8_t mv : 1; // stand
       uint8_t lahs : 1; // northern latitude
       uint8_t lohs : 1; // eastern longitude
-      uint8_t alte : 1; // presence of the elevation fields
+      uint8_t alte : 1; // presence of the altitude fields
     } flags;
     uint8_t spd; // speed 0.1 * km / h
     struct
     {
       uint8_t spd : 6; // upper 6 bit of speed
-      uint8_t alts : 1; // presence of an alt field
+      uint8_t alts : 1; // altitude sign
       uint8_t dirh : 1; // 8 bits of the dir parameter
     } bf;
     uint8_t dir; // course
@@ -700,7 +698,7 @@ public:
   uint32_t GetTime( ){ return body.ntm + 1262304000; }
   void SetLongitude( double val ){ body.lon = val / 180.0 * 0xffffffff;}
   double GetLongitude( ){ return (double)body.lon / 0xffffffff * 180; }
-  void SetLatitude( double val ){ body.lat = val / 90.0 * 0xffffffff; }
+  void SetLatitude( double val );
   double GetLatitude( ){ return (double)body.lat / 0xffffffff * 90; }
   void SetSpeed( uint16_t value );
   uint16_t GetSpeed( );
