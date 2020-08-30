@@ -37,11 +37,84 @@ const char* TSubrecord::SubrecordData(const char *data, uint16_t *size) {
 
 char* TSubrecord::PrepareGetData(uint16_t *size) {
   char* data = new char[*size + EGTS_SBR_HDR_SIZE];
+  memset(data + EGTS_SBR_HDR_SIZE, 0, *size);
   subrec_header_t *header = (subrec_header_t*) data;
   header->type = type; //srt
   header->len = *size; // srl
   *size += EGTS_SBR_HDR_SIZE;
   return data;
+}
+
+TCommandData::TCommandData() {
+  type = EGTS_SR_COMMAND_DATA;
+  memset(&head, 0, sizeof(head));
+  memset(&command, 0, sizeof(command));
+  memset(&confirmation, 0, sizeof(confirmation));
+}
+
+uint8_t TCommandData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
+  if (size < sizeof(head)) return 0;
+  memcpy(&head, data, sizeof(head));
+  uint16_t pos = sizeof(head);
+  if (head.bit_fields.chsfe) {
+    if (size < pos + 1) return 0;
+    chs = data[pos++];
+  }
+  if (head.bit_fields.acfe) {
+    if (size < pos + 1) return 0;
+    acl = data[pos++];
+    if (size < pos + acl) return 0;
+    ac.reset(new char[acl]);
+    memcpy(ac.get(), data + pos, acl);
+    pos += acl;
+  }
+  if (head.ct == CT_COMCONF) {
+    if (size < pos + sizeof(confirmation)) return 0;
+    memcpy(&confirmation, data + pos, sizeof(confirmation));
+    pos += sizeof(confirmation);
+  } else if (head.ct == CT_COM) {
+    if (size < pos + sizeof(command)) return 0;
+    memcpy(&command, data + pos, sizeof(command));
+    pos += sizeof(command);
+  }
+  if (size > pos) {
+    cd.size = size - pos;
+    cd.data.reset(new char[cd.size]);
+    memcpy(cd.data.get(), data + pos, cd.size);
+    pos += cd.size;
+  }
+  if (ppos) *ppos = pos;
+  return 1;
+}
+
+std::unique_ptr<char> TCommandData::GetData(uint16_t *size) {
+
+  *size = sizeof(head) + head.bit_fields.chsfe + cd.size;
+  if (head.bit_fields.acfe) *size += acl + 1;
+  if (head.ct == CT_COMCONF) *size += sizeof(confirmation);
+  else if (head.ct == CT_COM) *size += sizeof(command);
+  std::unique_ptr<char> ptr(PrepareGetData(size));
+  char *data = (ptr.get() + EGTS_SBR_HDR_SIZE);
+  uint32_t pos = sizeof(head);
+  memcpy(data, &head, pos);
+  if (head.bit_fields.chsfe) data[pos++] = chs;
+  if (head.bit_fields.acfe) {
+    data[pos++] = acl;
+    memcpy(data + pos, ac.get(), acl);
+    pos += acl;
+  }
+  if (head.ct == CT_COMCONF) {
+    memcpy(data + pos, &confirmation, sizeof(confirmation));
+    pos += sizeof(confirmation);
+  } else if (head.ct == CT_COM) {
+    memcpy(data + pos, &command, sizeof(command));
+    pos += sizeof(command);
+  }
+
+  char *buf = cd.data.get();
+
+  if (cd.size) memcpy(data + pos, cd.data.get(), cd.size);
+  return ptr;
 }
 
 uint8_t TECallRawMSD::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
@@ -71,13 +144,13 @@ TECallMSD::TECallMSD() {
   bf.latd2 = 0x7fff;
   bf.lond2 = 0x7fff;
   bf.nop = 0xff;
-  memset(&head, 0, sizeof ( head));
+  memset(&head, 0, sizeof( head));
   additional.data.reset();
 }
 
 uint8_t TECallMSD::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
-  if (size < sizeof ( head)) return 0;
-  uint16_t pos = sizeof ( head);
+  if (size < sizeof( head)) return 0;
+  uint16_t pos = sizeof( head);
   memcpy(&head, data, pos);
   uint16_t len = size - pos;
   if (ppos) *ppos = pos;
@@ -104,7 +177,7 @@ std::unique_ptr<char> TECallMSD::GetData(uint16_t *size) {
   else if (bf.lond1 != 0x7fff) opt_size = 4;
   else if (bf.latd1 != 0x7fff) opt_size = 2;
   if (additional.size) opt_size = 9;
-  uint16_t pos = sizeof ( head);
+  uint16_t pos = sizeof( head);
   *size = pos + opt_size + additional.size;
   std::unique_ptr<char> ptr(PrepareGetData(size));
   char *data = (ptr.get() + EGTS_SBR_HDR_SIZE);
@@ -119,7 +192,7 @@ std::unique_ptr<char> TECallMSD::GetData(uint16_t *size) {
 }
 
 TEPCompData::TEPCompData() {
-  memset(&head, 0, sizeof (head));
+  memset(&head, 0, sizeof(head));
   type = EGTS_SR_EP_COMP_DATA;
 }
 
@@ -160,7 +233,7 @@ std::unique_ptr<TSubrecord> TEPCompData::Extract() {
 }
 
 uint8_t TEPCompData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
-  uint16_t pos = sizeof ( head);
+  uint16_t pos = sizeof( head);
   if (size < pos) return 0;
   memcpy(&head, data, pos);
   if (head.cdl + pos > size) return 0;
@@ -172,12 +245,12 @@ uint8_t TEPCompData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
 }
 
 std::unique_ptr<char> TEPCompData::GetData(uint16_t *size) {
-  *size = sizeof ( head) + head.cdl;
+  *size = sizeof( head) + head.cdl;
   std::unique_ptr<char> ptr(PrepareGetData(size));
   char *data = (ptr.get() + EGTS_SBR_HDR_SIZE);
-  memcpy(data, &head, sizeof ( head));
+  memcpy(data, &head, sizeof( head));
   if (head.cdl && cd.get())
-    memcpy(data + sizeof ( head), cd.get(), head.cdl);
+    memcpy(data + sizeof( head), cd.get(), head.cdl);
   return ptr;
 }
 
@@ -210,7 +283,7 @@ TEPSignature::TEPSignature() {
 }
 
 uint8_t TEPSignature::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
-  const uint16_t sd_head_size = sizeof ( TEPSignData::sign_data_head_t);
+  const uint16_t sd_head_size = sizeof( TEPSignData::sign_data_head_t);
   if (2 > size) return 0;
   ver = data[0];
   sa = data[1];
@@ -233,7 +306,7 @@ uint8_t TEPSignature::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
 }
 
 std::unique_ptr<char> TEPSignature::GetData(uint16_t *size) {
-  const uint16_t sd_head_size = sizeof ( TEPSignData::sign_data_head_t);
+  const uint16_t sd_head_size = sizeof(TEPSignData::sign_data_head_t);
   *size = 2;
   sa = sd_list.Count();
   TEPSignData *sd = sd_list.First();
@@ -256,7 +329,7 @@ std::unique_ptr<char> TEPSignature::GetData(uint16_t *size) {
 }
 
 TEPAccelData3::TEPAccelData3() {
-  memset(&head, 0, sizeof ( head));
+  memset(&head, 0, sizeof( head));
   head.bnl = 1;
   head.bf2.mu = 1;
   type = EGTS_SR_EP_ACCEL_DATA3;
@@ -285,7 +358,7 @@ void TEPAccelData3::SetMSec(uint16_t val) {
 
 uint16_t TEPAccelData3::GetMSec() {
   uint16_t val = head.bf1.atmsh;
-  return ( val << 8) +head.atmsl;
+  return( val << 8) +head.atmsl;
 }
 
 void TEPAccelData3::SetRSA(uint16_t val) {
@@ -295,13 +368,13 @@ void TEPAccelData3::SetRSA(uint16_t val) {
 
 uint16_t TEPAccelData3::GetRSA() {
   uint16_t val = head.bf2.rsah;
-  return ( val << 8) +head.rsal;
+  return( val << 8) +head.rsal;
 }
 
 uint8_t TEPAccelData3::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
-  const uint16_t head_size = sizeof ( head);
-  const uint16_t ad_head_size = sizeof ( accel_data_head_t);
-  const uint16_t ad_size = sizeof ( accel_data_struct_t);
+  const uint16_t head_size = sizeof( head);
+  const uint16_t ad_head_size = sizeof( accel_data_head_t);
+  const uint16_t ad_size = sizeof( accel_data_struct_t);
   if (head_size > size) return 0;
   memcpy(&head, data, head_size);
   uint16_t pos = head_size, rsa = GetRSA();
@@ -322,9 +395,9 @@ uint8_t TEPAccelData3::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
 }
 
 std::unique_ptr<char> TEPAccelData3::GetData(uint16_t *size) {
-  const uint16_t head_size = sizeof ( head);
-  const uint16_t ad_head_size = sizeof ( accel_data_head_t);
-  const uint16_t ad_size = sizeof ( accel_data_struct_t);
+  const uint16_t head_size = sizeof( head);
+  const uint16_t ad_head_size = sizeof( accel_data_head_t);
+  const uint16_t ad_size = sizeof( accel_data_struct_t);
   *size = head_size;
   SetRSA(ad_list.Count());
   for (accel_data_t *ad = ad_list.First(); ad; ad = ad_list.Next()) {
@@ -346,9 +419,9 @@ std::unique_ptr<char> TEPAccelData3::GetData(uint16_t *size) {
 }
 
 TEPRelativeTrack::TEPRelativeTrack() {
-  memset(&head0, 0, sizeof ( head0));
-  memset(&body, 0, sizeof ( body));
-  memset(&alt, 0, sizeof ( alt));
+  memset(&head0, 0, sizeof( head0));
+  memset(&body, 0, sizeof( body));
+  memset(&alt, 0, sizeof( alt));
   spdl = 0;
 }
 
@@ -363,7 +436,7 @@ double TEPRelativeTrack::GetLonDelta() {
   uint16_t lond = body.bf2.londh;
   lond = (lond << 8) + body.londl;
   if (!body.bf2.lons) lond *= -1;
-  return (double) lond / 0xffffffff * 180;
+  return(double) lond / 0xffffffff * 180;
 }
 
 void TEPRelativeTrack::SetLatDelta(double val) {
@@ -377,7 +450,7 @@ double TEPRelativeTrack::GetLatDelta() {
   uint16_t latd = body.bf1.latdh;
   latd = (latd << 8) + body.latdl;
   if (!body.bf1.lats) latd *= -1;
-  return (double) latd / 0xffffffff * 90;
+  return(double) latd / 0xffffffff * 90;
 }
 
 void TEPRelativeTrack::SetAltDelta(short val) {
@@ -409,12 +482,12 @@ void TEPRelativeTrack::SetCourse(uint16_t val) {
 
 uint16_t TEPRelativeTrack::GetCourse() {
   uint16_t val = body.bf1.dirh;
-  return ( val << 8) +body.dirl;
+  return( val << 8) +body.dirl;
 }
 
 TEPTrackData::TEPTrackData() {
-  memset(&head, 0, sizeof ( head));
-  memset(&tds, 0, sizeof ( tds));
+  memset(&head, 0, sizeof( head));
+  memset(&tds, 0, sizeof( tds));
   head.bnl = 1;
   type = EGTS_SR_EP_TRACK_DATA;
 }
@@ -436,9 +509,9 @@ void TEPTrackData::SetTime(unsigned int value) {
 }
 
 uint8_t TEPTrackData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
-  const uint16_t head_size = sizeof ( head);
-  const uint16_t tds_size = sizeof ( tds);
-  const uint16_t rt_body_size = sizeof ( TEPRelativeTrack::rt_body_t);
+  const uint16_t head_size = sizeof( head);
+  const uint16_t tds_size = sizeof( tds);
+  const uint16_t rt_body_size = sizeof( TEPRelativeTrack::rt_body_t);
   if (head_size > size) return 0;
   memcpy(&head, data, head_size);
   uint16_t pos = head_size;
@@ -472,9 +545,9 @@ uint8_t TEPTrackData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
 }
 
 std::unique_ptr<char> TEPTrackData::GetData(uint16_t *size) {
-  const uint16_t head_size = sizeof ( head);
-  const uint16_t tds_size = sizeof ( tds);
-  const uint16_t rt_body_size = sizeof ( TEPRelativeTrack::rt_body_t);
+  const uint16_t head_size = sizeof( head);
+  const uint16_t tds_size = sizeof( tds);
+  const uint16_t rt_body_size = sizeof( TEPRelativeTrack::rt_body_t);
   *size = head_size;
   if (head.bf2.tde) *size += tds_size;
   head.rsa = rt_list.Count();
@@ -545,11 +618,11 @@ void TEPTrackData::SetCourse(uint16_t val) {
 
 uint16_t TEPTrackData::GetCourse() {
   uint16_t val = tds.bf.dirh;
-  return ( val << 8) +tds.dirl;
+  return( val << 8) +tds.dirl;
 }
 
 TEPMainData::TEPMainData() {
-  memset(&head, 0, sizeof ( head));
+  memset(&head, 0, sizeof( head));
   head.fv = 1;
   head.bnl = 1;
   head.cn.clt = 1; // test call
@@ -602,13 +675,13 @@ void TEPMainData::SetCourse(uint16_t val) {
 
 uint16_t TEPMainData::GetCourse() {
   uint16_t val = location.bf.dirh;
-  return ( val << 8) +location.dirl;
+  return( val << 8) +location.dirl;
 }
 
 uint8_t TEPMainData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
-  const uint16_t head_size = sizeof ( head);
-  const uint16_t loc_size = sizeof ( location);
-  const uint16_t bs_size = sizeof ( base_station_t);
+  const uint16_t head_size = sizeof( head);
+  const uint16_t loc_size = sizeof( location);
+  const uint16_t bs_size = sizeof( base_station_t);
   if (head_size > size) return 0;
   memcpy(&head, data, head_size);
   uint16_t pos = head_size;
@@ -642,9 +715,9 @@ uint8_t TEPMainData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
 }
 
 std::unique_ptr<char> TEPMainData::GetData(uint16_t *size) {
-  const uint16_t head_size = sizeof ( head);
-  const uint16_t loc_size = sizeof ( location);
-  const uint16_t bs_size = sizeof ( base_station_t);
+  const uint16_t head_size = sizeof( head);
+  const uint16_t loc_size = sizeof( location);
+  const uint16_t bs_size = sizeof( base_station_t);
   *size = head_size;
   if (head.cn.locp) *size += loc_size;
   head.cn.lbsn = stations.Count();
@@ -700,7 +773,7 @@ std::unique_ptr<char> TRecResp::GetData(uint16_t *size) {
 
 TTermIdent::TTermIdent() {
   type = EGTS_SR_TERM_IDENTITY;
-  memset(&head, 0, sizeof ( head));
+  memset(&head, 0, sizeof( head));
   head.flags.ssra = 1;
   hdid = 0;
   memcpy(imei, "000000000000000\0", 16);
@@ -765,7 +838,7 @@ std::unique_ptr<char> TTermIdent::GetData(uint16_t *size) {
 }
 
 void TTermIdent::GetData(char* data) {
-  uint16_t pos = sizeof ( head);
+  uint16_t pos = sizeof( head);
   memcpy(data, &head, pos);
   if (head.flags.hdide) {
     memcpy(data + pos, &hdid, 2);
@@ -857,7 +930,7 @@ std::unique_ptr<char> TDispIdent::GetData(uint16_t *size) {
 
 TAuthParams::TAuthParams() {
   type = EGTS_SR_AUTH_PARAMS;
-  memset(&flags, 0, sizeof ( flags));
+  memset(&flags, 0, sizeof( flags));
 }
 
 uint8_t TAuthParams::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
@@ -910,11 +983,11 @@ std::unique_ptr<char> TAuthInfo::GetData(uint16_t *size) {
 
 TServiceInfo::TServiceInfo() {
   type = EGTS_SR_SERVICE_INFO;
-  memset(&body, 0, sizeof ( body));
+  memset(&body, 0, sizeof( body));
 }
 
 uint8_t TServiceInfo::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
-  const uint16_t body_size = sizeof ( body);
+  const uint16_t body_size = sizeof( body);
   if (size < body_size) return 0;
   memcpy(&body, data, body_size);
   if (ppos) *ppos = body_size;
@@ -922,7 +995,7 @@ uint8_t TServiceInfo::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
 }
 
 std::unique_ptr<char> TServiceInfo::GetData(uint16_t *size) {
-  *size = sizeof ( body);
+  *size = sizeof( body);
   std::unique_ptr<char> ptr(PrepareGetData(size));
   char *data = (ptr.get() + EGTS_SBR_HDR_SIZE);
   memcpy(data, &body, *size);
@@ -931,11 +1004,11 @@ std::unique_ptr<char> TServiceInfo::GetData(uint16_t *size) {
 
 TVehicleData::TVehicleData() {
   type = EGTS_SR_VEHICLE_DATA;
-  memset(&body, 0, sizeof (body));
+  memset(&body, 0, sizeof(body));
 }
 
 uint8_t TVehicleData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
-  const uint16_t body_size = sizeof ( body);
+  const uint16_t body_size = sizeof( body);
   if (size < body_size) return 0;
   memcpy(&body, data, body_size);
   if (ppos) *ppos = body_size;
@@ -943,7 +1016,7 @@ uint8_t TVehicleData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
 }
 
 std::unique_ptr<char> TVehicleData::GetData(uint16_t *size) {
-  *size = sizeof ( body);
+  *size = sizeof( body);
   std::unique_ptr<char> ptr(PrepareGetData(size));
   char *data = (ptr.get() + EGTS_SBR_HDR_SIZE);
   memcpy(data, &body, *size);
@@ -975,9 +1048,9 @@ TInsAccel::TInsAccel() {
   body.ymod = body.xmod;
   body.zmod = body.xmod;
   dl = 0;
-  memset(&x, 0, sizeof ( calibration_data_t));
-  memset(&y, 0, sizeof ( calibration_data_t));
-  memset(&z, 0, sizeof ( calibration_data_t));
+  memset(&x, 0, sizeof( calibration_data_t));
+  memset(&y, 0, sizeof( calibration_data_t));
+  memset(&z, 0, sizeof( calibration_data_t));
 }
 
 TSubrecord* TInsAccel::Copy() {
@@ -1049,7 +1122,7 @@ uint8_t TInsAccel::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
 }
 
 std::unique_ptr<char> TInsAccel::GetData(uint16_t *size) {
-  *size = sizeof ( head);
+  *size = sizeof( head);
   if (!head.pid) {
     *size += 16;
     x.size = GetXsize();
@@ -1094,7 +1167,7 @@ std::unique_ptr<char> TPlusData::GetData(uint16_t *size) {
 
 TPosData::TPosData() {
   type = EGTS_SR_POS_DATA;
-  memset(&body, 0, sizeof ( body));
+  memset(&body, 0, sizeof( body));
   body.flags.vld = 1;
   memset(alt, 0, 3);
   srcd = 0;
@@ -1132,7 +1205,7 @@ void TPosData::SetCourse(uint16_t val) {
 
 uint16_t TPosData::GetCourse() {
   uint16_t val = body.bf.dirh;
-  return ( val << 8) +body.dir;
+  return( val << 8) +body.dir;
 }
 
 void TPosData::SetOdometer(uint32_t val) {
@@ -1160,15 +1233,15 @@ int TPosData::GetAltitude() {
 }
 
 uint8_t TPosData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
-  uint16_t body_size = sizeof ( body);
+  uint16_t body_size = sizeof( body);
   if (size < body_size) return 0;
   memcpy(&body, data, body_size);
   uint16_t pos = body_size;
-  if (body.flags.alte)
-    if (size >= pos + 3) {
-      memcpy(alt, data + pos, 3);
-      pos += 3;
-    }
+  if (body.flags.alte) {
+    if (size < pos + 3) return 0;
+    memcpy(alt, data + pos, 3);
+    pos += 3;
+  }
   if (size >= pos + 2) memcpy(&srcd, data + pos, 2);
   if (ppos) *ppos = pos;
   return 1;
@@ -1176,7 +1249,7 @@ uint8_t TPosData::SetSRD(const char *data, uint16_t size, uint16_t *ppos) {
 
 std::unique_ptr<char> TPosData::GetData(uint16_t *size) {
   *size = 0;
-  uint16_t body_size = sizeof ( body);
+  uint16_t body_size = sizeof( body);
   *size = body_size + 3 * body.flags.alte + 2 * body.src;
   std::unique_ptr<char> ptr(PrepareGetData(size));
   char *data = (ptr.get() + EGTS_SBR_HDR_SIZE);

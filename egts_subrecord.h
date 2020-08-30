@@ -19,22 +19,61 @@
 namespace EGTS
 {
 
-class TSubrecord
-{
+class TSubrecord{
 protected:
   uint8_t type;
-  char* PrepareGetData( uint16_t *size );
+  char* PrepareGetData(uint16_t *size);
   
 public:
-  TSubrecord( ){ type = 0; }
-  virtual ~TSubrecord( ){}
+  TSubrecord(){ type = 0; }
+  virtual ~TSubrecord(){}
   virtual TSubrecord* Copy(){ return 0; }
   uint8_t GetType(){ return type; }
-  const char* SubrecordData( const char *data, uint16_t *size );
-  virtual uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 )
+  const char* SubrecordData(const char *data, uint16_t *size);
+  virtual uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0)
   { return 0; }
-  virtual std::unique_ptr<char> GetData( uint16_t *size )
+  virtual std::unique_ptr<char> GetData(uint16_t *size)
   { return std::unique_ptr<char>(); }
+};
+
+class TCommandData : public TSubrecord{  // EGTS_SR_COMMAND_DATA
+public:
+  TCommandData();
+  ~TCommandData(){}
+  enum cmd_type_enum_t{ CT_COMCONF = 1, CT_MSGCONF, CT_MSGFROM,
+    CTMSGTO, CT_COM, CT_DELCOM, CT_SUBREC, CT_DELIV    
+  };  
+#pragma pack(push,1)
+  struct{
+    uint8_t cct : 4;
+    uint8_t ct : 4;
+    uint32_t cid;
+    uint32_t sid;
+    struct{
+      uint8_t chsfe : 1;
+      uint8_t acfe : 1;
+      uint8_t void_field : 6;
+    } bit_fields;
+  } head;  
+  struct{
+    uint16_t adr;
+    struct{
+      uint8_t act : 4;
+      uint8_t sz : 4;
+    } bit_fields;    
+    uint16_t ccd;
+  } command;
+  struct{
+    uint16_t adr;
+    uint16_t ccd;    
+  }confirmation;
+#pragma pack(pop)
+  uint8_t chs;
+  uint8_t acl;
+  std::unique_ptr<char> ac;
+  data_size_t cd;
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TECallRawMSD : public TSubrecord  // EGTS_SR_RAW_MSD_DATA
@@ -45,11 +84,11 @@ public:
   uint8_t fm;
   EGTS::data_size_t msd;
 #if __cplusplus > 199711L
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 ) override;
-  std::unique_ptr<char> GetData( uint16_t *size ) override;
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0) override;
+  std::unique_ptr<char> GetData(uint16_t *size) override;
 #else
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 #endif  
 };
 
@@ -59,8 +98,7 @@ public:
   TECallMSD();
   ~TECallMSD(){}
 #pragma pack(push,1)
-  struct
-  {
+  struct{
     uint8_t fv;
     uint8_t mi;
     uint8_t act : 1;
@@ -74,8 +112,7 @@ public:
     int32_t plon;
     uint8_t vd;
   } head;
-  struct
-  {
+  struct{
     int16_t latd1;
     int16_t lond1;
     int16_t latd2;
@@ -85,32 +122,32 @@ public:
 #pragma pack(pop)
   EGTS::data_size_t additional;
 
-  void SetTime( uint32_t val ){ head.ts = htonl( val ); }
-  uint32_t GetTime( ){ return ntohl( head.ts ); }
-  void SetLatitude( double val ){ head.plat = htonl( val * 3600000.0 ); }
-  double GetLatitude( ){ return ntohl( head.plat ) / 3600000.0; }
-  void SetLongitude( double val ){ head.plon = htonl( val * 3600000.0 ); }
-  double GetLongitude( ){ return ntohl( head.plon ) / 3600000.0; }
-  void SetCourse( uint16_t val ){ head.vd = val / 2; }
-  uint16_t GetCourse( ) { return head.vd * 2; }
-  void SetLatDelta1( int16_t val ){ bf.latd1 = htonl( val ); }
-  int16_t GetLatDelta1( ){ return ntohl( bf.latd1 ); }
-  void SetLonDelta1( int16_t val ){ bf.lond1 = htonl( val ); }
-  int16_t GetLonDelta1( ){ return ntohl( bf.lond1 ); }
-  void SetLatDelta2( int16_t val ){ bf.latd2 = htonl( val ); }
-  int16_t GetLatDelta2( ){ return ntohl( bf.latd2 ); }
-  void SetLonDelta2( int16_t val ){ bf.lond2 = htonl( val ); }
-  int16_t GetLonDelta2( ){ return ntohl( bf.lond2 ); }
+  void SetTime(uint32_t val){ head.ts = htonl(val); }
+  uint32_t GetTime(){ return ntohl(head.ts); }
+  void SetLatitude(double val){ head.plat = htonl(val * 3600000.0); }
+  double GetLatitude(){ return ntohl(head.plat) / 3600000.0; }
+  void SetLongitude(double val){ head.plon = htonl(val * 3600000.0); }
+  double GetLongitude(){ return ntohl(head.plon) / 3600000.0; }
+  void SetCourse(uint16_t val){ head.vd = val / 2; }
+  uint16_t GetCourse() { return head.vd * 2; }
+  void SetLatDelta1(int16_t val){ bf.latd1 = htonl(val); }
+  int16_t GetLatDelta1(){ return ntohl(bf.latd1); }
+  void SetLonDelta1(int16_t val){ bf.lond1 = htonl(val); }
+  int16_t GetLonDelta1(){ return ntohl(bf.lond1); }
+  void SetLatDelta2(int16_t val){ bf.latd2 = htonl(val); }
+  int16_t GetLatDelta2(){ return ntohl(bf.latd2); }
+  void SetLonDelta2(int16_t val){ bf.lond2 = htonl(val); }
+  int16_t GetLonDelta2(){ return ntohl(bf.lond2); }
   
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TEPCompData : public TSubrecord // EGTS_SR_EP_COMP_DATA
 {
 public:
-  TEPCompData( );
-  ~TEPCompData( ) { }
+  TEPCompData();
+  ~TEPCompData() { }
 #pragma pack(push,1)
   struct
   {
@@ -126,49 +163,46 @@ public:
   } head;
 #pragma pack(pop)
   std::unique_ptr<char> cd;
-  void SetBlockNumber( uint16_t value );
-  uint16_t GetBlockNumber( );
+  void SetBlockNumber(uint16_t value);
+  uint16_t GetBlockNumber();
   std::unique_ptr<TSubrecord> Extract();
-  uint8_t Compress( TSubrecord* );
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t Compress(TSubrecord*);
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
-class TEPSignData
-{
+class TEPSignData{
 public:
-	TEPSignData(){ memset( &head, 0, sizeof( head ) ); }
+	TEPSignData(){ memset(&head, 0, sizeof(head)); }
 #pragma pack(push,1)
-  struct sign_data_head_t
-  {
+  struct sign_data_head_t{
     uint8_t bnl;
     uint16_t keyn;
     uint32_t algid;
     uint8_t slnl;
-    struct
-    {
+    struct{
       uint8_t slnh : 6;
       uint8_t bnh : 2;
     } bf;
   } head;
 #pragma pack(pop)
   std::unique_ptr<char> sd;
-  void SetBlockNumber( uint16_t val );
-  uint16_t GetBlockNumber( );
-  void SetSignLength( uint16_t val );
-  uint16_t GetSignLength( );
+  void SetBlockNumber(uint16_t val);
+  uint16_t GetBlockNumber();
+  void SetSignLength(uint16_t val);
+  uint16_t GetSignLength();
 };
 
 class TEPSignature : public TSubrecord // EGTS_SR_EP_SIGNATURE
 {
 public:
-  TEPSignature( );
-  ~TEPSignature( ){}
+  TEPSignature();
+  ~TEPSignature(){}
   uint8_t ver;
   uint8_t sa;
-  EGTS::object_list_t< TEPSignData > sd_list;
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  EGTS::object_list_t<TEPSignData> sd_list;
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TEPAccelData3 : public TSubrecord //EGTS_SR_EP_ACCEL_DATA3
@@ -211,31 +245,30 @@ public:
     accel_data_struct_t ads;
   } head;
 #pragma pack(pop)
-  struct accel_data_t
-  {
-    accel_data_t( ) { memset( &head, 0, sizeof ( accel_data_head_t) ); }
+  struct accel_data_t{
+    accel_data_t() { memset(&head, 0, sizeof (accel_data_head_t)); }
     accel_data_head_t head;
     accel_data_struct_t ads;
   };
-  EGTS::object_list_t< accel_data_t > ad_list;
+  EGTS::object_list_t<accel_data_t> ad_list;
 
-  void SetBlockNumber( uint16_t value );
-  uint16_t GetBlockNumber( );
-  void SetTime( uint32_t value );
-  uint32_t GetTime( ){ return head.at + 1262304000; }
-  void SetMSec( uint16_t value );
-  uint16_t GetMSec( );
-  void SetRSA( uint16_t value );
-  uint16_t GetRSA( );
+  void SetBlockNumber(uint16_t value);
+  uint16_t GetBlockNumber();
+  void SetTime(uint32_t value);
+  uint32_t GetTime(){ return head.at + 1262304000; }
+  void SetMSec(uint16_t value);
+  uint16_t GetMSec();
+  void SetRSA(uint16_t value);
+  uint16_t GetRSA();
 
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TEPRelativeTrack
 {
 public:
-  TEPRelativeTrack( );
+  TEPRelativeTrack();
 #pragma pack(push,1)
   union
   {
@@ -280,16 +313,16 @@ public:
   } alt;
 #pragma pack(pop)
   rt_body_t body;
-  void SetLonDelta( double val );
-  double GetLonDelta( );
-  void SetLatDelta( double val );
-  double GetLatDelta( );
-  void SetAltDelta( short val );
-  short GetAltDelta( );
-  void SetSpeedDelta( uint16_t val );
-  uint16_t GetSpeedDelta( );
-  void SetCourse( uint16_t val );
-  uint16_t GetCourse( );
+  void SetLonDelta(double val);
+  double GetLonDelta();
+  void SetLatDelta(double val);
+  double GetLatDelta();
+  void SetAltDelta(short val);
+  short GetAltDelta();
+  void SetSpeedDelta(uint16_t val);
+  uint16_t GetSpeedDelta();
+  void SetCourse(uint16_t val);
+  uint16_t GetCourse();
 };
 
 class TEPTrackData : public TSubrecord // EGTS_SR_EP_TRACK_DATA
@@ -335,29 +368,29 @@ public:
 #pragma pack(pop)
 
   EGTS::object_list_t< TEPRelativeTrack > rt_list;
-  void SetBlockNumber( uint16_t value );
-  uint16_t GetBlockNumber( );
-  void SetTime( uint32_t value );
-  uint32_t GetTime( ){ return head.at + 1262304000; }
-  void SetLongitude( double val ){ tds.lon = val / 180.0 * 0xffffffff; }
-  double GetLongitude( ){ return (double)tds.lon / 0xffffffff * 180; }
-  void SetLatitude( double val ){ tds.lat = val / 90.0 * 0xffffffff; }
-  double GetLatitude( ){ return (double)tds.lat / 0xffffffff * 90; }
-  void SetAltitude( short val );
-  short GetAltitude( );
-  void SetSpeed( uint16_t val );
-  uint16_t GetSpeed( );
-  void SetCourse( uint16_t val );
-  uint16_t GetCourse( );
+  void SetBlockNumber(uint16_t value);
+  uint16_t GetBlockNumber();
+  void SetTime(uint32_t value);
+  uint32_t GetTime(){ return head.at + 1262304000; }
+  void SetLongitude(double val){ tds.lon = val / 180.0 * 0xffffffff; }
+  double GetLongitude(){ return (double)tds.lon / 0xffffffff * 180; }
+  void SetLatitude(double val){ tds.lat = val / 90.0 * 0xffffffff; }
+  double GetLatitude(){ return (double)tds.lat / 0xffffffff * 90; }
+  void SetAltitude(short val);
+  short GetAltitude();
+  void SetSpeed(uint16_t val);
+  uint16_t GetSpeed();
+  void SetCourse(uint16_t val);
+  uint16_t GetCourse();
 
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TEPMainData : public TSubrecord // EGTS_SR_EP_MAIN_DATA
 {
 public:
-  TEPMainData( );
+  TEPMainData();
 #pragma pack(push,1)
   struct
   {
@@ -417,23 +450,23 @@ public:
   uint8_t epevc;
   std::deque< uint32_t > events;
 
-  void SetBlockNumber( uint16_t value );
-  uint16_t GetBlockNumber( );
-  void SetTime( uint32_t value );
-  uint32_t GetTime( ){ return head.ts + 1262304000; }
-  void SetMSec( uint16_t value );
-  uint16_t GetMSec( );
-  void SetLongitude( double val ){ location.lon = val / 180.0 * 0xffffffff; }
-  double GetLongitude( ){ return (double)location.lon / 0xffffffff * 180;	}
-  void SetLatitude( double val ){ location.lat = val / 90.0 * 0xffffffff; }
-  double GetLatitude( ) { return (double)location.lat / 0xffffffff * 90; }
-  void SetSpeed( uint16_t value );
-  uint16_t GetSpeed( );
-  void SetCourse( uint16_t value );
-  uint16_t GetCourse( );
+  void SetBlockNumber(uint16_t value);
+  uint16_t GetBlockNumber();
+  void SetTime(uint32_t value);
+  uint32_t GetTime(){ return head.ts + 1262304000; }
+  void SetMSec(uint16_t value);
+  uint16_t GetMSec();
+  void SetLongitude(double val){ location.lon = val / 180.0 * 0xffffffff; }
+  double GetLongitude(){ return (double)location.lon / 0xffffffff * 180;	}
+  void SetLatitude(double val){ location.lat = val / 90.0 * 0xffffffff; }
+  double GetLatitude() { return (double)location.lat / 0xffffffff * 90; }
+  void SetSpeed(uint16_t value);
+  uint16_t GetSpeed();
+  void SetCourse(uint16_t value);
+  uint16_t GetCourse();
 
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TRecResp : public TSubrecord  // EGTS_SR_RECORD_RESPONSE
@@ -443,21 +476,19 @@ public:
   uint16_t crn;
   uint8_t rst;
   
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TTermIdent : public TSubrecord // EGTS_SR_TERM_IDENTITY
 {
 public:
-  TTermIdent( );
-  ~TTermIdent( ){}
-#pragma pack( push, 1 )
-  struct
-  {
+  TTermIdent();
+  ~TTermIdent(){}
+#pragma pack(push, 1)
+  struct{
     uint32_t tid; // veh_id
-    struct
-    {
+    struct{
       uint8_t hdide : 1;
       uint8_t imeie : 1;
       uint8_t imsie : 1;
@@ -468,8 +499,7 @@ public:
       uint8_t mne : 1;
     } flags;
   } head;
-  struct
-  {
+  struct{
     uint32_t mnc : 10;
     uint32_t mcc : 10;
   } nid;
@@ -480,19 +510,19 @@ public:
   char lngc[3];
   uint16_t bs;
   char msisdn[16];
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
   
 protected:
-  void GetData( char *data );
-  uint16_t GetSize( ); 
+  void GetData(char *data);
+  uint16_t GetSize(); 
 };
 
 class TTermIdent2 : public TTermIdent //EGTS_SR_TERM_IDENTITY2
 {
 public:
-  TTermIdent2( );
-#pragma pack( push, 1 )
+  TTermIdent2();
+#pragma pack(push, 1)
   struct
   {
     uint8_t icce : 1;
@@ -500,8 +530,8 @@ public:
   } flags;
   char iccid[20];
 #pragma pack(pop)
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size ) override final;
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size) override final;
 };
 
 class TDispIdent : public TSubrecord // EGTS_SR_DISPATCHER_IDENTITY
@@ -516,8 +546,8 @@ public:
   } head;
 #pragma pack(pop)
   std::string dscr;
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TAuthParams : public TSubrecord // EGTS_SR_AUTH_PARAMS
@@ -536,19 +566,19 @@ public:
     uint8_t void_field : 1;
   } flags;
 #pragma pack(pop)
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TAuthInfo : public TSubrecord // EGTS_SR_AUTH_INFO
 {
 public:
-  TAuthInfo( ){ type = EGTS_SR_AUTH_INFO; }
+  TAuthInfo(){ type = EGTS_SR_AUTH_INFO; }
   std::string user_name;
   std::string user_pass;
   std::string server_sequence;
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TServiceInfo : public TSubrecord //EGTS_SR_SERVICE_INFO
@@ -568,14 +598,14 @@ public:
     } srvp;
   } body;
 #pragma pack(pop)
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TVehicleData : public TSubrecord // EGTS_SR_VEHICLE_DATA
 {
 public:
-  TVehicleData( );
+  TVehicleData();
 #pragma pack(push,1)
   struct
   {
@@ -584,23 +614,23 @@ public:
     uint32_t vpst;
   } body;
 #pragma pack(pop)
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TResultCode : public TSubrecord // EGTS_SR_RESULT_CODE
 {
 public:
-  TResultCode( ){ type = EGTS_SR_RESULT_CODE; rcd = 0; }
+  TResultCode(){ type = EGTS_SR_RESULT_CODE; rcd = 0; }
   uint8_t rcd;
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TInsAccel : public TSubrecord // EGTS_SR_INSURANCE_ACCEL_DATA
 {
 public:
-  TInsAccel( );
+  TInsAccel();
   TSubrecord* Copy();
 #pragma pack(push,1)
   struct mod_xyz_t
@@ -639,14 +669,14 @@ public:
   };
   calibration_data_t x, y, z;
   std::unique_ptr<char> xyz_data;
-  uint8_t GetXsize( );
-  uint8_t GetYsize( );
-  uint8_t GetZsize( );
-  void SetTime( uint32_t value );
-  uint32_t GetTime( ){ return body.atm + 1262304000; }
+  uint8_t GetXsize();
+  uint8_t GetYsize();
+  uint8_t GetZsize();
+  void SetTime(uint32_t value);
+  uint32_t GetTime(){ return body.atm + 1262304000; }
 
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TPlusData : public TSubrecord // EGTS_SR_EGTSPLUS_DATA
@@ -654,14 +684,14 @@ class TPlusData : public TSubrecord // EGTS_SR_EGTSPLUS_DATA
 public:
   TPlusData(){ type = EGTS_SR_EGTSPLUS_DATA; }
   EGTS::data_size_t protobuf;
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TPosData : public TSubrecord // EGTS_SR_POS_DATA
 {
 public:
-  TPosData( );
+  TPosData();
 #pragma pack(push,1)
   struct
   {
@@ -694,23 +724,23 @@ public:
 #pragma pack(pop)
   uint8_t alt[3]; // altitude
   uint16_t srcd;
-  void SetTime( uint32_t value );
-  uint32_t GetTime( ){ return body.ntm + 1262304000; }
-  void SetLongitude( double val ){ body.lon = val / 180.0 * 0xffffffff;}
-  double GetLongitude( ){ return (double)body.lon / 0xffffffff * 180; }
-  void SetLatitude( double val );
-  double GetLatitude( ){ return (double)body.lat / 0xffffffff * 90; }
-  void SetSpeed( uint16_t value );
-  uint16_t GetSpeed( );
-  void SetCourse( uint16_t value );
-  uint16_t GetCourse( );
-  void SetOdometer( uint32_t val );
-  uint32_t GetOdometer( );
-  void SetAltitude( int value );
-  int GetAltitude( );
+  void SetTime(uint32_t value);
+  uint32_t GetTime(){ return body.ntm + 1262304000; }
+  void SetLongitude(double val){ body.lon = val / 180.0 * 0xffffffff;}
+  double GetLongitude(){ return (double)body.lon / 0xffffffff * 180; }
+  void SetLatitude(double val);
+  double GetLatitude(){ return (double)body.lat / 0xffffffff * 90; }
+  void SetSpeed(uint16_t value);
+  uint16_t GetSpeed();
+  void SetCourse(uint16_t value);
+  uint16_t GetCourse();
+  void SetOdometer(uint32_t val);
+  uint32_t GetOdometer();
+  void SetAltitude(int value);
+  int GetAltitude();
 
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TExtPosData : public TSubrecord // EGTS_SR_EXT_POS_DATA
@@ -734,8 +764,8 @@ public:
   uint8_t sat;
   uint16_t ns;
 
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TAdSensors : public TSubrecord // EGTS_SR_AD_SENSORS_DATA
@@ -744,7 +774,7 @@ private:
   uint8_t dins[8];
   uint8_t ains[24];
 public:
-  TAdSensors( );
+  TAdSensors();
 #pragma pack(push,1)
   struct
   {
@@ -782,13 +812,13 @@ public:
   } head;
 #pragma pack(pop)
   
-  void SetDin( uint8_t num, uint8_t val );
-  uint8_t GetDin( uint8_t num );
-  void SetAin( uint8_t num, uint32_t val );
-  uint32_t GetAin( uint8_t num );
+  void SetDin(uint8_t num, uint8_t val);
+  uint8_t GetDin(uint8_t num);
+  void SetAin(uint8_t num, uint32_t val);
+  uint32_t GetAin(uint8_t num);
 
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TCounters : public TSubrecord // EGTS_SR_COUNTERS_DATA
@@ -796,7 +826,7 @@ class TCounters : public TSubrecord // EGTS_SR_COUNTERS_DATA
 private:
   char cnts[24];
 public:
-  TCounters( );
+  TCounters();
 #pragma pack(push,1)
   union
   {
@@ -814,10 +844,10 @@ public:
   uint8_t cntfe;
   };
 #pragma pack(pop)
-  void SetCounter( uint8_t num, uint32_t val );
-  uint32_t GetCounter( uint8_t num );
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  void SetCounter(uint8_t num, uint32_t val);
+  uint32_t GetCounter(uint8_t num);
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TStateData : public TSubrecord // EGTS_SR_STATE_DATA
@@ -831,8 +861,7 @@ public:
     uint8_t mpsv;
     uint8_t bbv;
     uint8_t ibv;
-    struct
-    {
+    struct{
       uint8_t bbu : 1;
       uint8_t ibu : 1;
       uint8_t nms : 1;
@@ -840,8 +869,8 @@ public:
     } flags;
   } body;
 #pragma pack(pop)
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 class TLiquidLevel : public TSubrecord // EGTS_SR_LIQUID_LEVEL_SENSOR
@@ -863,8 +892,8 @@ public:
   } head;
 #pragma pack(pop)
   EGTS::data_size_t llcd;
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 
 
@@ -925,8 +954,8 @@ public:
   };
   EGTS::object_list_t< door_num_t > doors;
 
-  uint8_t SetSRD( const char *data, uint16_t size, uint16_t *pos = 0 );
-  std::unique_ptr<char> GetData( uint16_t *size );
+  uint8_t SetSRD(const char *data, uint16_t size, uint16_t *pos = 0);
+  std::unique_ptr<char> GetData(uint16_t *size);
 };
 }
 #endif
