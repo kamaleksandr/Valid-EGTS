@@ -110,9 +110,6 @@ std::unique_ptr<char> TCommandData::GetData(uint16_t *size) {
     memcpy(data + pos, &command, sizeof(command));
     pos += sizeof(command);
   }
-
-  char *buf = cd.data.get();
-
   if (cd.size) memcpy(data + pos, cd.data.get(), cd.size);
   return ptr;
 }

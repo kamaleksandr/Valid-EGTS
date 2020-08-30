@@ -2,17 +2,18 @@
  * File:   main.cpp
  * Author: kamyshev.a
  *
- * Created on 29 August 2018, 15:50
+ * Created on 29 августа 2018 г., 15:50
  */
 
 #include <cstdlib>
 #include <iostream>
 #include "egts_packet.h"
+#include "common.h"
 
 using namespace std;
 using namespace EGTS;
 
-static void OnError(EGTS::error_t* error) {
+void OnError(EGTS::error_t* error) {
   std::cout << "Error, sender: " << error->sender.c_str();
   std::cout << "; message: " << error->message.c_str() << ";\r\n";
 }
@@ -20,8 +21,8 @@ static void OnError(EGTS::error_t* error) {
 int main(int argc, char** argv) {
   EGTS::SetErrorCallback(OnError);
   TPacket pack;
-  pack.head.pid = 10;
-  try {
+  pack.head.pid = 24;
+  try {   
     TRecord *ath = pack.recs.New();
     ath->rst = EGTS_AUTH_SERVICE;
     ath->head.rn = 0;
@@ -61,68 +62,68 @@ int main(int argc, char** argv) {
     tid2->flags.icce = 1;
     ath->sbrs.Add(tid2);
 
-    TRecord *tds = pack.recs.New();
+    TRecord *tds = pack.recs.New( );
     tds->rst = EGTS_TELEDATA_SERVICE;
     tds->head.rn = 1;
 
     TPlusData *pls = new TPlusData;
-    pls->protobuf.data.reset(new char[16]);
+    pls->protobuf.data.reset( new char[16] );
     pls->protobuf.size = 16;
-    tds->sbrs.Add(pls);
+    tds->sbrs.Add( pls );
 
     TPosData *pos = new TPosData;
-    pos->SetLatitude(55.5088);
-    pos->SetLongitude(37.3345);
-    pos->SetSpeed(100);
-    pos->SetCourse(180);
-    pos->SetTime(time(0));
-    tds->sbrs.Add(pos);
+    pos->SetLatitude( 55.5088 );
+    pos->SetLongitude( 37.3345 );
+    pos->SetSpeed( 100 );
+    pos->SetCourse( 180 );
+    pos->SetTime( time( 0 ) );
+    tds->sbrs.Add( pos );
 
-    tds->sbrs.Add(new TExtPosData);
+    tds->sbrs.Add( new TExtPosData );
 
     TAdSensors *ads = new TAdSensors;
-    ads->SetAin(2, 500);
-    ads->SetDin(3, 1);
-    tds->sbrs.Add(ads);
+    ads->SetAin( 2, 500 );
+    ads->SetDin( 3, 1 );
+    tds->sbrs.Add( ads );
 
     TCounters *cnt = new TCounters;
-    cnt->SetCounter(4, 3000);
-    tds->sbrs.Add(cnt);
+    cnt->SetCounter( 4, 3000 );
+    tds->sbrs.Add( cnt );
 
-    tds->sbrs.Add(new TStateData);
+    tds->sbrs.Add( new TStateData );
 
     TLiquidLevel *llv = new TLiquidLevel;
-    llv->llcd.data.reset(new char[16]);
+    llv->llcd.data.reset( new char[16] );
     llv->llcd.size = 16;
-    tds->sbrs.Add(llv);
+    tds->sbrs.Add( llv );
 
     TPassengers *psg = new TPassengers;
-    TPassengers::door_num_t *door = psg->doors.New();
+    TPassengers::door_num_t *door = psg->doors.New( );
     door->num = 3;
     door->door.psgs_in = 10;
     door->door.psgs_out = 5;
-    tds->sbrs.Add(psg);
+    tds->sbrs.Add( psg );
 
-    TRecord *ecs = pack.recs.New();
+    TRecord *ecs = pack.recs.New( );
     ecs->head.rn = 2;
     ecs->rst = EGTS_ECALL_SERVICE;
 
     TECallRawMSD *raw = new TECallRawMSD;
-    raw->msd.data.reset(new char[16]);
+    raw->msd.data.reset( new char[16] );
     raw->msd.size = 16;
-    ecs->sbrs.Add(raw);
+    ecs->sbrs.Add( raw );
 
     TECallMSD *msd = new TECallMSD;
     msd->bf.lond2 = 1;
-    msd->additional.data.reset(new char[16]);
+    msd->additional.data.reset( new char[16] );
     msd->additional.size = 16;
-    ecs->sbrs.Add(msd);
+    ecs->sbrs.Add( msd );
 
-    TRecord *ins = pack.recs.New();
+    TRecord *ins = pack.recs.New( );
     ins->head.rn = 3;
     ins->rst = EGTS_INSURANCE_SERVICE;
     ins->sbrs.Add(new TInsAccel);
-
+    
     TRecord *eps = pack.recs.New();
     eps->rst = EGTS_EUROPROTOCOL_SERVICE;
     eps->head.rn = 4;
@@ -143,6 +144,23 @@ int main(int argc, char** argv) {
     memcpy(sd->sd.get(), "test signature\0", 15);
     sd->SetSignLength(72);
     eps->sbrs.Add(sign);
+    
+    TRecord *cms = pack.recs.New();
+    cms->rst = EGTS_COMMANDS_SERVICE;
+    cms->sst = EGTS_COMMANDS_SERVICE;
+    cms->head.rfl.rsod = 1;
+    cms->head.rn = 24;
+    TCommandData *cd = new TCommandData;
+    cd->head.ct = TCommandData::CT_COM;
+    cd->head.cid = 24;
+    //cd->command.ccd = 0x0112;
+    cd->command.ccd = 0x0113;
+    cd->cd.size = 5;
+    cd->cd.data.reset(new char[cd->cd.size]);
+    memset(cd->cd.data.get(), 0, cd->cd.size);
+    //cd->cd.data.get()[0] = 0x01;
+    cd->cd.data.get()[4] = 0x02;
+    cms->sbrs.Add(cd);
 
   } catch (std::exception &e) {
     std::cout << e.what() << "\r\n";
@@ -217,7 +235,7 @@ int main(int argc, char** argv) {
           }
         }
       } else if (r->rst == EGTS_EUROPROTOCOL_SERVICE) {
-        if (type == EGTS_SR_EP_COMP_DATA) {
+        if (type == EGTS_SR_EP_MAIN_DATA) {
           TEPMainData *md = dynamic_cast<TEPMainData*> (sbr);
           if (md) std::cout << "bn = " << md->GetBlockNumber();
         } else if (type == EGTS_SR_EP_COMP_DATA) {
@@ -232,6 +250,16 @@ int main(int argc, char** argv) {
           TEPSignData *ds = sign->sd_list.First();
           if (!ds) continue;
           std::cout << "signature length = " << ds->GetSignLength() << ", " << ds->sd.get();
+        }
+      } else if (r->rst == EGTS_COMMANDS_SERVICE) {
+        if (type == EGTS_SR_COMMAND_DATA) {
+          TCommandData *cd = dynamic_cast<TCommandData*> (sbr);
+          std::cout << "command data, ct = " << (uint32_t) cd->head.ct
+              << ", data size = " << cd->cd.size << ", adr = " << cd->command.adr
+              << ", ccd = " << std::showbase << std::hex << cd->command.ccd;
+          char *data = cd->cd.data.get();
+          std::string s = common::BinToHex((uint8_t*) cd->cd.data.get(), cd->cd.size);
+          std::cout << ", cd = " << s.c_str() << std::endl;
         }
       }
     }
